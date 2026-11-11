@@ -2,6 +2,8 @@
 
 App de celular para dividir a fatura do cartão Nubank entre as pessoas que usam o cartão.
 
+**Abrir o app:** https://francwrlanh19-ai.github.io/fatura-a-dois/
+
 - Sobe o CSV da fatura (no app do Nubank: fatura → exportar).
 - O app separa sozinho o que já conhece e pergunta só as compras novas.
 - Cada pessoa tem o total dela, quanto falta devolver e um resumo pra copiar e mandar.
