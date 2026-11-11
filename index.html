@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Fatura a dois</title>
 <meta name="theme-color" content="#1E6B57">
 <link rel="manifest" href="manifest.webmanifest">
@@ -141,6 +141,47 @@ summary .s-left { flex: 1; }
 .nv-dot.bad { background: var(--bad); }
 .txt-erro { color: var(--bad); }
 .inp-link { width: 100%; }
+/* toque */
+button, .btn, .pbtn, .tab, summary, label { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.btn:active:not(:disabled), .pbtn:active:not(:disabled), .tab:active, .dz-btn:active { filter: brightness(.92); transform: translateY(1px); }
+.wrap { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+/* separar uma por vez */
+.btn.cheio { width: 100%; justify-content: center; min-height: 48px; font-size: 15px; }
+.foco-prog { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.foco-prog span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.foco-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.foco-desc { font: 700 19px/1.3 var(--font-d); overflow-wrap: anywhere; }
+.foco-meta { font-size: 13px; color: var(--muted); }
+.foco-val { font: 700 28px/1.2 var(--font-d); font-variant-numeric: tabular-nums; margin-top: 6px; }
+.foco-botoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pbtn.grande { min-height: 54px; font-size: 16px; border-radius: 12px; border: 2px solid color-mix(in srgb, var(--pc, var(--line)) 55%, var(--line)); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.pbtn.grande::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--pc); flex: none; }
+.pbtn.grande.div::before { border-radius: 2px; }
+.foco-rodape { justify-content: space-between; }
+@media (max-width: 560px) {
+  select, input[type="text"], input[type="password"], textarea { font-size: 16px; }
+  .wrap { gap: 12px; padding-top: 14px; }
+  header.top { gap: 8px; }
+  header.top .controls { width: 100%; }
+  #sel-fatura { flex: 1 1 200px; min-width: 0; }
+  .card { padding: 14px; }
+  /* resumo em lista: uma linha por pessoa */
+  .tiles { grid-template-columns: 1fr; gap: 6px; }
+  .tile { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "lbl val" "sub btn"; align-items: center; column-gap: 12px; row-gap: 2px;
+    border-top-width: 1px; border-left: 5px solid var(--pc, var(--line)); padding: 10px 12px; }
+  .tile .lbl { grid-area: lbl; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .tile .val { grid-area: val; font-size: 19px; text-align: right; }
+  .tile .sub { grid-area: sub; }
+  .tile .btn { grid-area: btn; margin-top: 0; justify-self: end; }
+  /* botões de quem é: grade com alvo grande */
+  .ln-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .pbtn { min-height: 44px; padding: 8px 6px; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .linha { padding: 12px 0; }
+  .btn { min-height: 44px; }
+  .btn.small-btn { min-height: 38px; }
+  summary { min-height: 40px; align-items: center; }
+  .foco-desc { font-size: 18px; }
+}
 .desfazer { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   width: min(520px, calc(100% - 24px)); display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-radius: 12px;
   background: var(--ink); color: var(--bg); box-shadow: 0 6px 24px rgba(0,0,0,.22); font-size: 14px; }
@@ -269,7 +310,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     carregou: { faturas: false, regras: false }, lento: false, aiBusy: false, aiMsg: "",
     upload: null, uploadErro: "", erroEscrita: "", abrirDiv: null, copiado: null, textoCopia: null, removendo: null,
     podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "", soLeitura: false,
-    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, abertos: new Set(),
+    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, abertos: new Set(), foco: false, pulados: new Set(), focoPrimeiro: null,
   };
 
   // ---------- texto ----------
@@ -510,6 +551,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     mostrarDesfazer = pilhaDesfazer.length > 0;
     if (mostrarDesfazer) timerDesfazer = setTimeout(() => { mostrarDesfazer = false; desenharDesfazer(); }, 10000);
     S.abrirDiv = null; S.atual = a.fid;
+    S.focoPrimeiro = a.principal !== undefined ? a.fid + ":" + a.principal : null;
     render();
   }
   function desenharDesfazer() {
@@ -528,6 +570,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     if (S.readOnly) return;
     const f = S.faturas.get(fid); if (!f) return;
     const l = f.linhas.find((x) => x.i === i); if (!l) return;
+    S.focoPrimeiro = null;
     const antes = new Map(f.linhas.map((x) => [x.i, estadoDono(x)]));
     let regra = null;
     aplicarDono(l, dono, via || "manual", divisao);
@@ -547,7 +590,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     const mudadas = f.linhas.filter((x) => JSON.stringify(estadoDono(x)) !== JSON.stringify(antes.get(x.i))).map((x) => antes.get(x.i));
     if (mudadas.length || regra) {
       const outras = mudadas.filter((s) => s.i !== i).length;
-      registrarAcao({ fid, linhas: mudadas, regra,
+      registrarAcao({ fid, linhas: mudadas, regra, principal: i,
         texto: temDono(l) ? `“${curta(l.desc)}” → ${rotuloDono(l)}` + (outras ? ` (e mais ${outras} parecida${outras > 1 ? "s" : ""})` : "")
           : `“${curta(l.desc)}” voltou para Sem dono` });
     }
@@ -757,6 +800,45 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     return li;
   }
 
+  // Separar uma por vez: uma compra grande na tela, botões grandes, e a próxima aparece sozinha.
+  function desenharFoco(fid, f, pend) {
+    const el = $("#semdono");
+    const total = f.linhas.filter((l) => l.tipo === "compra").length, feitas = total - pend.length;
+    let fila = pend.filter((l) => !S.pulados.has(fid + ":" + l.i));
+    if (pend.length && !fila.length) { S.pulados.clear(); fila = pend; }
+    const volta = S.focoPrimeiro ? pend.find((l) => fid + ":" + l.i === S.focoPrimeiro) : null;   // a que acabou de ser desfeita
+    if (volta) fila = [volta, ...fila.filter((l) => l !== volta)];
+    const atual = fila[0];
+    const desfazer = pilhaDesfazer.length ? h("button", { type: "button", class: "btn small-btn", "data-act": "desfazer", title: "Desfazer: " + pilhaDesfazer[pilhaDesfazer.length - 1].texto, text: "↶ Desfazer" }) : null;
+    const barra = h("div", { class: "foco-prog", role: "progressbar", "aria-label": "Compras separadas", "aria-valuemin": "0", "aria-valuemax": String(total), "aria-valuenow": String(feitas) },
+      h("span", { style: `width:${total ? (feitas / total) * 100 : 100}%` }));
+    if (!atual) {
+      fill(el, h("div", { class: "row-between" }, h("h2", { text: "Tudo separado!" }), h("div", { class: "controls" }, desfazer)), barra,
+        h("p", { text: "Todas as compras desta fatura já têm dono." }),
+        h("button", { type: "button", class: "btn primary cheio", "data-act": "foco-sair", "data-topo": "1", text: "Ver o resumo" }));
+      return;
+    }
+    const key = fid + ":" + atual.i;
+    const pulados = pend.filter((l) => S.pulados.has(fid + ":" + l.i)).length;
+    fill(el,
+      h("div", { class: "row-between" }, h("h2", { text: `Faltam ${pend.length}` }),
+        h("div", { class: "controls" }, desfazer, h("button", { type: "button", class: "btn small-btn", "data-act": "foco-sair", text: "Ver lista" }))),
+      barra,
+      h("div", { class: "foco-card", role: "group", "aria-label": "Compra para separar" },
+        h("p", { class: "foco-desc", text: atual.desc }),
+        h("p", { class: "foco-meta", text: `${diaMes(atual.data)} · ${categoria(atual.desc)}` }),
+        h("p", { class: "foco-val", text: fmt(atual.valor) })),
+      h("p", { class: "muted small", text: "De quem é?" }),
+      h("div", { class: "foco-botoes", role: "group", "aria-label": "De quem é" },
+        S.pessoas.map((p) => h("button", { type: "button", class: "pbtn grande", style: estilo(p.id), "data-act": "dono", "data-fid": fid, "data-i": atual.i, "data-dono": p.id, text: p.nome })),
+        h("button", { type: "button", class: "pbtn grande div", "data-act": "abrir-div", "data-fid": fid, "data-i": atual.i, "aria-expanded": S.abrirDiv === key ? "true" : "false", text: "Dividir" })),
+      S.abrirDiv === key ? seletorDivisao(fid, atual) : null,
+      h("div", { class: "controls foco-rodape" },
+        h("button", { type: "button", class: "btn", "data-act": "foco-pular", "data-fid": fid, "data-i": atual.i, text: pend.length > 1 ? "Pular por enquanto" : "Deixar para depois" }),
+        h("label", { class: "toggle small" }, h("input", { type: "checkbox", id: "chk-lembrar", checked: S.lembrar }), "Lembrar nas próximas")),
+      pulados ? h("p", { class: "muted small", text: `${pulados} pulada${pulados > 1 ? "s" : ""}: elas voltam no fim.` }) : null);
+  }
+
   function render() {
     // lembra quais seções estavam abertas (lido da tela, que é o que a pessoa está vendo agora)
     for (const d of document.querySelectorAll("details[data-abre]")) { if (d.open) S.abertos.add(d.dataset.abre); else S.abertos.delete(d.dataset.abre); }
@@ -848,7 +930,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
         h("button", { type: "button", class: "btn small-btn", "data-act": "copiar", "data-pid": p.id, text: S.copiado === p.id ? "Copiado!" : "Copiar resumo" }));
     });
     tiles.push(h("div", { class: "tile sem" + (t.nSem ? "" : " zero") }, h("span", { class: "lbl", text: "Sem dono" }), h("span", { class: "val", text: fmt(t.sem) }),
-      h("span", { class: "sub", text: t.nSem ? `${t.nSem} compra${t.nSem > 1 ? "s" : ""} para decidir` : "Tudo separado" })));
+      h("span", { class: "sub", text: t.nSem ? `${t.nSem} compra${t.nSem > 1 ? "s" : ""} para decidir` : "Tudo separado" }),
+      t.nSem && !S.readOnly && !S.foco ? h("button", { type: "button", class: "btn small-btn", "data-act": "foco-entrar", text: "Separar agora" }) : null));
     const pct = (x) => (t.tot > 0 ? Math.max(0, Math.min(100, (x / t.tot) * 100)) : 0);
     fill($("#resumo"), 
       h("div", { class: "tiles" }, tiles),
@@ -862,12 +945,14 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     // sem dono
     const pend = f.linhas.filter((l) => l.tipo === "compra" && !temDono(l)).sort(porData);
     const temSug = pend.some((l) => S.sug.has(fid + ":" + l.i));
-    fill($("#semdono"), 
+    if (S.foco && !S.readOnly) desenharFoco(fid, f, pend);
+    else fill($("#semdono"), 
       h("div", { class: "row-between" }, h("h2", { text: pend.length ? `Sem dono (${pend.length})` : "Sem dono" }),
         !S.readOnly && (pend.length || pilhaDesfazer.length) ? h("div", { class: "controls" },
           pilhaDesfazer.length ? h("button", { type: "button", class: "btn small-btn", "data-act": "desfazer", title: "Desfazer: " + pilhaDesfazer[pilhaDesfazer.length - 1].texto, text: "↶ Desfazer" }) : null,
           pend.length && S.sample ? h("button", { type: "button", class: "btn", "data-act": "sugerir", disabled: S.aiBusy, text: S.aiBusy ? "Pensando…" : "Sugerir com IA" }) : null,
           pend.length && temSug ? h("button", { type: "button", class: "btn", "data-act": "aceitar-todas", text: "Aceitar sugestões" }) : null) : null),
+      pend.length > 1 && !S.readOnly ? h("button", { type: "button", class: "btn primary cheio", "data-act": "foco-entrar", text: `Separar uma por vez (${pend.length})` }) : null,
       pend.length ? h("label", { class: "toggle" }, h("input", { type: "checkbox", id: "chk-lembrar", checked: S.lembrar, disabled: S.readOnly }),
         "Lembrar minhas escolhas nas próximas faturas") : null,
       S.aiMsg ? h("p", { class: "muted small", text: S.aiMsg }) : null,
@@ -1663,6 +1748,14 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     }
     else if (act === "tirar-div") { S.abrirDiv = null; definir(fid, i, null, "manual"); }
     else if (act === "desfazer") desfazerUltima();
+    else if (act === "foco-entrar") { S.foco = true; S.pulados.clear(); S.abrirDiv = null; S.focoPrimeiro = null; render(); const sd = $("#semdono"); if (sd && sd.scrollIntoView) sd.scrollIntoView({ block: "start", behavior: "smooth" }); }
+    else if (act === "foco-sair") { S.foco = false; S.pulados.clear(); S.abrirDiv = null; render(); if (b.dataset.topo) window.scrollTo({ top: 0, behavior: "smooth" }); }
+    else if (act === "foco-pular") {
+      S.pulados.add(fid + ":" + i); S.abrirDiv = null; S.focoPrimeiro = null;
+      const fx = S.faturas.get(fid); const resta = fx ? fx.linhas.filter((l) => l.tipo === "compra" && !temDono(l) && !S.pulados.has(fid + ":" + l.i)).length : 0;
+      if (!resta) S.foco = false;
+      render();
+    }
     else if (act === "fechar-desfazer") { mostrarDesfazer = false; clearTimeout(timerDesfazer); desenharDesfazer(); }
     else if (act === "aba") { const alvo = b.dataset.aba === "graficos" ? "graficos" : "separar"; if (location.hash !== "#" + alvo) location.hash = alvo; else { S.view = alvo; render(); } }
     else if (act === "pessoa-graf") { if (pessoa(b.dataset.pid)) { S.pessoaGraf = b.dataset.pid; render(); } }
@@ -1697,7 +1790,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   }, true);
   document.addEventListener("change", (ev) => {
     const t = ev.target;
-    if (t.id === "sel-fatura") { S.atual = t.value; S.aiMsg = ""; S.abrirDiv = null; render(); }
+    if (t.id === "sel-fatura") { S.atual = t.value; S.aiMsg = ""; S.abrirDiv = null; S.pulados.clear(); render(); }
     else if (t.id === "chk-lembrar") { S.lembrar = t.checked; }
     else if (t.id === "inp-file") { const file = t.files && t.files[0]; if (file) lerArquivo(file); t.value = ""; }
     else if (t.id === "inp-backup") { const file = t.files && t.files[0]; if (file) lerBackup(file); t.value = ""; }

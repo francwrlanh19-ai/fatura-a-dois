@@ -399,6 +399,50 @@ async function chave(pg, tok, re) {
     await dz.reload(); await dz.waitForSelector('#semdono:not(.hidden)');
     ok((await semDono(dz)) === sdFinal, 'depois de recarregar, as trocas continuam (' + sdFinal + ')');
 
+    // 17) Separar uma por vez (celular)
+    const um = await celular(browser, 'umporvez'); paginas.push(um);
+    await um.goto(BASE); await um.waitForSelector('#vazio:not(.hidden)');
+    await um.setInputFiles('#inp-backup', DIR + '/backup-inventado.json');
+    await um.click('[data-act="confirmar-restaurar"]'); await um.waitForSelector('#semdono:not(.hidden)');
+    await um.screenshot({ path: DIR + '/tela-resumo-celular.png' });
+    const alturaResumo = await um.$eval('#resumo', (e) => e.getBoundingClientRect().height);
+    ok(alturaResumo < 480, `resumo compacto no celular (${Math.round(alturaResumo)} px de altura)`);
+    const alvos = await um.$$eval('#semdono .pbtn', (bs) => bs.map((b) => b.getBoundingClientRect().height));
+    ok(alvos.length && alvos.every((a) => a >= 44), 'botões de quem é com pelo menos 44 px de altura');
+    ok(await um.$eval('#inp-backup', () => parseFloat(getComputedStyle(document.querySelector('#sel-fatura')).fontSize) >= 16), 'campos com letra 16 px (sem zoom no iPhone)');
+    await um.click('.tile.sem [data-act="foco-entrar"]');
+    await um.waitForSelector('.foco-card');
+    await um.screenshot({ path: DIR + '/tela-uma-por-vez.png' });
+    const titulo = () => um.$eval('#semdono h2', (e) => e.textContent);
+    const atual = () => um.$eval('.foco-desc', (e) => e.textContent);
+    const prim = await atual();
+    ok((await titulo()) === 'Faltam 3', 'uma por vez: mostra quantas faltam');
+    await um.click('.foco-botoes .pbtn[data-dono="ele"]');
+    const seg = await atual();
+    ok(seg !== prim && (await titulo()) === 'Faltam 2', `uma por vez: escolheu e já veio a próxima (${prim} → ${seg})`);
+    await um.click('[data-act="foco-pular"]');
+    const ter = await atual();
+    ok(ter !== seg && /1 pulada/.test(await um.$eval('#semdono', (e) => e.innerText)), `pular mostra a próxima (${ter})`);
+    await um.click('.foco-botoes [data-act="abrir-div"]');
+    await um.click('[data-act="confirmar-div"]');
+    ok((await atual()) === seg, 'dividir passa para a próxima, e a pulada volta no fim');
+    await um.click('#semdono [data-act="desfazer"]');
+    ok((await atual()) === ter && (await titulo()) === 'Faltam 2', 'desfazer dentro do modo traz a compra de volta');
+    await um.click('.foco-botoes .pbtn[data-dono="ela"]');
+    ok((await atual()) === seg, 'depois dela, volta a pulada');
+    await um.click('.foco-botoes .pbtn[data-dono="p-carla"]');
+    await esperarTexto(um, '#semdono', /Tudo separado!/);
+    ok(true, 'uma por vez: termina em "Tudo separado!"');
+    await um.click('[data-act="foco-sair"]');
+    ok(!(await um.$('.foco-card')) && /Tudo separado nesta fatura/.test(await um.$eval('#semdono', (e) => e.innerText)), 'volta para a lista');
+    await esperar(1200);
+    await um.reload(); await um.waitForSelector('#semdono:not(.hidden)');
+    ok(/Tudo separado nesta fatura/.test(await um.$eval('#semdono', (e) => e.innerText)), 'depois de recarregar continua tudo separado');
+    await um.click('[data-act="aba"][data-aba="graficos"]'); await um.waitForSelector('#graficos:not(.hidden)');
+    await um.screenshot({ path: DIR + '/tela-graficos-celular.png', fullPage: true });
+    const larguraPagina = await um.evaluate(() => document.documentElement.scrollWidth);
+    ok(larguraPagina <= 390, `nada passa da largura do celular (${larguraPagina} px)`);
+
     const erros = paginas.flatMap((p) => p.erros);
     ok(!erros.length, 'console sem erros' + (erros.length ? ': ' + erros.join(' | ') : ''));
   } catch (e) {
