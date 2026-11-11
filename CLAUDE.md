@@ -10,7 +10,7 @@
     - O link nasce no próprio app: em "Compartilhar esta fatura", quem tem os dados cola a chave, e o app gera a senha no celular e sobe tudo. Não subir dados reais por fora, nem cifrados.
 - Nunca commitar CSV de fatura, arquivo de backup, a senha do link nem uma chave do GitHub. O `.gitignore` já bloqueia CSV e backup.
   - O único dado de verdade no repositório é o `dados.json` cifrado da branch `dados`, que o app grava sozinho.
-  - Não apagar essa branch nem editar o arquivo à mão. Para trocar o conteúdo, use `testes/cifra.py`.
+  - Não apagar essa branch nem editar o arquivo à mão. Os dados só mudam pelo próprio app (inclusive restaurar um backup). O `testes/cifra.py` é só para os testes.
 - Chaves do banco: `faturas/AAAA-MM-DD`, `regras/<slug>`, `config/pessoas`.
   - Backup: `{ app: "fatura-a-dois", versao: 1, exportadoEm, dados: { caminho: documento } }`.
   - O `dados.json` guarda o mesmo `{ app, versao, dados }` dentro da cifra.
