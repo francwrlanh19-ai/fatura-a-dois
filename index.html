@@ -141,6 +141,7 @@ summary .s-left { flex: 1; }
 .nv-dot.bad { background: var(--bad); }
 .txt-erro { color: var(--bad); }
 .inp-link { width: 100%; }
+input[type="date"] { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-height: 40px; }
 /* toque */
 button, .btn, .pbtn, .tab, summary, label { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .btn:active:not(:disabled), .pbtn:active:not(:disabled), .tab:active, .dz-btn:active { filter: brightness(.92); transform: translateY(1px); }
@@ -159,7 +160,7 @@ button, .btn, .pbtn, .tab, summary, label { -webkit-tap-highlight-color: transpa
 .pbtn.grande.div::before { border-radius: 2px; }
 .foco-rodape { justify-content: space-between; }
 @media (max-width: 560px) {
-  select, input[type="text"], input[type="password"], textarea { font-size: 16px; }
+  select, input[type="text"], input[type="password"], input[type="date"], textarea { font-size: 16px; }
   .wrap { gap: 12px; padding-top: 14px; }
   header.top { gap: 8px; }
   header.top .controls { width: 100%; }
@@ -310,7 +311,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     carregou: { faturas: false, regras: false }, lento: false, aiBusy: false, aiMsg: "",
     upload: null, uploadErro: "", erroEscrita: "", abrirDiv: null, copiado: null, textoCopia: null, removendo: null,
     podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "", soLeitura: false,
-    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, abertos: new Set(), foco: false, pulados: new Set(), focoPrimeiro: null,
+    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, atualEscolhido: false, abertos: new Set(), foco: false, pulados: new Set(), focoPrimeiro: null,
   };
 
   // ---------- texto ----------
@@ -550,7 +551,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     clearTimeout(timerDesfazer);
     mostrarDesfazer = pilhaDesfazer.length > 0;
     if (mostrarDesfazer) timerDesfazer = setTimeout(() => { mostrarDesfazer = false; desenharDesfazer(); }, 10000);
-    S.abrirDiv = null; S.atual = a.fid;
+    S.abrirDiv = null; S.atual = a.fid; S.atualEscolhido = true;
     S.focoPrimeiro = a.principal !== undefined ? a.fid + ":" + a.principal : null;
     render();
   }
@@ -663,31 +664,39 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     S.uploadErro = ""; S.uploadTitulo = ""; S.upload = null;
     try {
       const text = await file.text();
-      const linhas = linhasDoCSV(text);
+      const cru = linhasDoCSV(text);
       const m = String(file.name || "").match(/(\d{4}-\d{2}-\d{2})/);
-      let fid, rotulo, venc = null;
-      if (m) { fid = m[1]; venc = m[1]; rotulo = "Vencimento " + dataBR(m[1]); }
-      else { const max = linhas.map((l) => l.data).sort().pop(); fid = max; rotulo = "Compras até " + dataBR(max); }
-      const ex = S.faturas.get(fid);
-      if (ex) {
-        const mapa = new Map();
-        for (const l of ex.linhas || []) { const k = l.data + "|" + l.desc + "|" + l.valor; if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(l); }
-        for (const l of linhas) {
-          const arr = mapa.get(l.data + "|" + l.desc + "|" + l.valor);
-          if (arr && arr.length) {
-            const o = arr.shift();
-            if (o.dono) aplicarDono(l, o.dono, o.via || "manual", o.divisao);
-            const q = o.pagoPor || (o.pagoPorEle ? "ele" : null); if (q) l.pagoPor = q;
-          }
-        }
-      }
-      const auto = autoClassificar(linhas, fid);
-      const compras = linhas.filter((l) => l.tipo === "compra").length;
-      S.upload = { fid, rotulo, venc, linhas, auto, compras, pagamentos: linhas.length - compras, existe: !!ex, nomeArq: file.name };
+      if (m) prepararUpload(cru, m[1], m[1], file.name);
+      else prepararUpload(cru, cru.map((l) => l.data).sort().pop(), null, file.name);
     } catch (e) {
       S.uploadErro = (e && e.message) || "Não consegui ler esse arquivo.";
     }
     render();
+  }
+  // Junta o arquivo com a fatura de mesmo vencimento (se já existir) e conta o que muda.
+  function prepararUpload(cru, fid, venc, nomeArq) {
+    const linhas = clone(cru);
+    const rotulo = venc ? "Vencimento " + dataBR(venc) : "Compras até " + dataBR(fid);
+    const ex = S.faturas.get(fid);
+    let iguais = 0;
+    if (ex) {
+      const mapa = new Map();
+      for (const l of ex.linhas || []) { const k = l.data + "|" + l.desc + "|" + l.valor; if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(l); }
+      for (const l of linhas) {
+        const arr = mapa.get(l.data + "|" + l.desc + "|" + l.valor);
+        if (arr && arr.length) {
+          iguais++;
+          const o = arr.shift();
+          if (o.dono) aplicarDono(l, o.dono, o.via || "manual", o.divisao);
+          const q = o.pagoPor || (o.pagoPorEle ? "ele" : null); if (q) l.pagoPor = q;
+        }
+      }
+    }
+    const auto = autoClassificar(linhas, fid);
+    const compras = linhas.filter((l) => l.tipo === "compra").length;
+    const datas = linhas.filter((l) => l.tipo === "compra").map((l) => l.data).sort();
+    S.upload = { fid, rotulo, venc, linhas, auto, compras, pagamentos: linhas.length - compras, existe: !!ex, nomeArq, cru,
+      novas: linhas.length - iguais, sairam: ex ? (ex.linhas || []).length - iguais : 0, de: datas[0] || null, ate: datas[datas.length - 1] || null };
   }
   async function confirmarUpload() {
     const u = S.upload; if (!u || S.salvandoUpload) return;
@@ -702,10 +711,11 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
         render(); return;
       }
       S.salvandoUpload = false;
-      S.faturas.set(u.fid, f); S.atual = u.fid; S.upload = null; render(); return;
+      S.faturas.set(u.fid, f); S.atual = u.fid; S.atualEscolhido = true; S.upload = null; render(); return;
     }
-    S.faturas.set(u.fid, f); S.atual = u.fid; S.upload = null;
+    S.faturas.set(u.fid, f); S.atual = u.fid; S.atualEscolhido = true; S.upload = null;
     salvarFatura(u.fid); render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // ---------- IA ----------
@@ -844,8 +854,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     for (const d of document.querySelectorAll("details[data-abre]")) { if (d.open) S.abertos.add(d.dataset.abre); else S.abertos.delete(d.dataset.abre); }
     const sel = $("#sel-fatura");
     const ids = [...S.faturas.keys()].sort().reverse();
-    if (S.atual && !S.faturas.has(S.atual)) S.atual = null;
-    if (!S.atual && ids.length) S.atual = ids[0];
+    if (S.atual && !S.faturas.has(S.atual)) { S.atual = null; S.atualEscolhido = false; }
+    if ((!S.atual || !S.atualEscolhido) && ids.length) S.atual = ids[0];
     fill(sel, ...ids.map((id) => {
       const t = totais(S.faturas.get(id));
       return h("option", { value: id, selected: id === S.atual, text: (S.faturas.get(id).rotulo || id) + (t.nSem ? ` · ${t.nSem} sem dono` : " · tudo separado") });
@@ -884,13 +894,22 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
         h("div", { class: "controls" }, h("button", { type: "button", class: "btn", "data-act": "fechar-upload", text: "Fechar" })));
       else {
         const u = S.upload; const jaSep = u.linhas.filter((l) => l.tipo === "compra" && temDono(l)).length; const semDono = u.compras - jaSep;
-        fill(up, 
-          h("h2", { text: u.rotulo }),
-          h("p", { text: `${u.compras} compras e ${u.pagamentos} pagamentos em “${u.nomeArq}”. ${jaSep} já estão separadas${u.auto ? ` (${u.auto} agora, pelo que o app aprendeu)` : ""}; ${semDono} ficam para vocês decidirem.` }),
-          u.existe ? h("p", { class: "muted small", text: "Essa fatura já estava aqui. Salvar atualiza as linhas e mantém o que já tinha sido separado." }) : null,
+        const igual = u.existe && !u.novas && !u.sairam;
+        const periodo = u.de ? `Compras de ${diaMes(u.de)} a ${diaMes(u.ate)}. ` : "";
+        fill(up,
+          h("h2", { text: igual ? "Essa fatura já está no app" : u.existe ? `Atualizar a fatura: ${u.rotulo}` : `Fatura nova: ${u.rotulo}` }),
+          h("p", { text: `${periodo}${u.compras} compra${u.compras === 1 ? "" : "s"} e ${u.pagamentos} pagamento${u.pagamentos === 1 ? "" : "s"} em “${u.nomeArq}”.` }),
+          igual ? h("div", { class: "card notice" },
+              h("p", { text: `O arquivo é igual à fatura “${u.rotulo}”, que já está aqui: não tem nada novo nele.` }),
+              h("p", { class: "small", text: "Se você queria a fatura seguinte, confira no Nubank se ela já fechou e baixe o arquivo dela. Se esse arquivo for de outro mês, troque a data de vencimento abaixo." }))
+            : h("p", { text: (u.existe ? `Essa fatura já estava aqui: ${u.novas ? `entram ${u.novas} linha${u.novas > 1 ? "s" : ""} nova${u.novas > 1 ? "s" : ""}` : "nada de novo"}${u.sairam ? `, saem ${u.sairam}` : ""}, e o que já foi separado continua. ` : "")
+                + `${jaSep} já estão separadas${u.auto ? ` (${u.auto} agora, pelo que o app aprendeu)` : ""}; ${semDono} ficam para vocês decidirem.` }),
+          h("div", { class: "form-row" },
+            h("label", { class: "muted small", for: "inp-venc", text: "Vence em" }),
+            h("input", { type: "date", id: "inp-venc", value: u.venc || u.fid || "" })),
           h("div", { class: "controls" },
-            h("button", { type: "button", class: "btn primary", "data-act": "confirmar-upload", disabled: S.salvandoUpload, text: S.salvandoUpload ? "Salvando…" : "Salvar fatura" }),
-            h("button", { type: "button", class: "btn", "data-act": "fechar-upload", text: "Cancelar" })));
+            igual ? null : h("button", { type: "button", class: "btn primary", "data-act": "confirmar-upload", disabled: S.salvandoUpload, text: S.salvandoUpload ? "Salvando…" : "Salvar fatura" }),
+            h("button", { type: "button", class: igual ? "btn primary" : "btn", "data-act": "fechar-upload", text: igual ? "Fechar" : "Cancelar" })));
       }
     } else up.classList.add("hidden");
 
@@ -1790,9 +1809,10 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   }, true);
   document.addEventListener("change", (ev) => {
     const t = ev.target;
-    if (t.id === "sel-fatura") { S.atual = t.value; S.aiMsg = ""; S.abrirDiv = null; S.pulados.clear(); render(); }
+    if (t.id === "sel-fatura") { S.atual = t.value; S.atualEscolhido = true; S.aiMsg = ""; S.abrirDiv = null; S.pulados.clear(); render(); }
     else if (t.id === "chk-lembrar") { S.lembrar = t.checked; }
     else if (t.id === "inp-file") { const file = t.files && t.files[0]; if (file) lerArquivo(file); t.value = ""; }
+    else if (t.id === "inp-venc" && S.upload && /^\d{4}-\d{2}-\d{2}$/.test(t.value)) { const u = S.upload; prepararUpload(u.cru, t.value, t.value, u.nomeArq); render(); }
     else if (t.id === "inp-backup") { const file = t.files && t.files[0]; if (file) lerBackup(file); t.value = ""; }
     else if (t.classList.contains("sel-pagador")) definirPagador(t.dataset.fid, Number(t.dataset.i), t.value);
     else if (t.classList.contains("inp-nome")) renomearPessoa(t.dataset.pid, t.value);

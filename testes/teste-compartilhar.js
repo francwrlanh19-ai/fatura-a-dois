@@ -224,6 +224,24 @@ async function chave(pg, tok, re) {
     R.limite = false;
     ok(!R.chaveNoRaw, 'a chave nunca vai para o raw');
 
+    // 8b) Ela sobe a fatura do mês seguinte: aparece para ela e para ele
+    antes = R.puts;
+    await ela.setInputFiles('#inp-file', DIR + '/Nubank_2027-01-11.csv');
+    await esperarTexto(ela, '#upload', /Fatura nova/);
+    await ela.click('[data-act="confirmar-upload"]');
+    ok(await esperarSubir(ela, antes), 'fatura nova no compartilhado: subiu');
+    ok(!!abrirRemoto()['faturas/2027-01-11'] && !!abrirRemoto()['faturas/2026-12-11'], 'no GitHub ficam as duas faturas');
+    const faturaVista = (pg) => pg.$eval('#sel-fatura', (s) => s.options[s.selectedIndex].text);
+    ok((await faturaVista(ela)).includes('11/01/2027'), 'ela vê a fatura nova');
+    await ele.click('[data-act="nuvem-atualizar"]'); await esperar(1500);
+    ok((await faturaVista(ele)).includes('11/01/2027'), 'ele passa a ver a fatura nova sozinho: ' + await faturaVista(ele));
+    await ela.reload(); await esperarTexto(ela, '#nuvem-status', /Tudo salvo/);
+    ok((await faturaVista(ela)).includes('11/01/2027'), 'ela recarrega e continua na fatura nova');
+    await ele.selectOption('#sel-fatura', '2026-12-11');
+    await ele.click('[data-act="nuvem-atualizar"]'); await esperar(1200);
+    ok((await faturaVista(ele)).includes('11/12/2026'), 'se ele escolhe a anterior, ela continua escolhida');
+    await ele.selectOption('#sel-fatura', '2027-01-11');
+
     // 9) Senha errada
     const outro = await celular(browser, 'outro'); paginas.push(outro);
     await outro.goto(BASE + '#k=SenhaErradaInventada9999');
@@ -442,6 +460,31 @@ async function chave(pg, tok, re) {
     await um.screenshot({ path: DIR + '/tela-graficos-celular.png', fullPage: true });
     const larguraPagina = await um.evaluate(() => document.documentElement.scrollWidth);
     ok(larguraPagina <= 390, `nada passa da largura do celular (${larguraPagina} px)`);
+
+    // 19) Subir de novo a mesma fatura, trocar a data, arquivo com uma compra a mais
+    const linhasInv = JSON.parse(fs.readFileSync(DIR + '/backup-inventado.json', 'utf8')).dados['faturas/2026-12-11'].linhas;
+    const csvIgual = 'date,title,amount\n' + linhasInv.map((l) => `${l.data},${l.desc},${l.valor.toFixed(2)}`).join('\n') + '\n';
+    fs.writeFileSync(DIR + '/Nubank_2026-12-11.csv', csvIgual);
+    fs.mkdirSync(DIR + '/mais', { recursive: true });
+    fs.writeFileSync(DIR + '/mais/Nubank_2026-12-11.csv', csvIgual + '2026-11-29,Sorveteria Inventada,9.90\n');
+    const up = await celular(browser, 'subir'); paginas.push(up);
+    await up.goto(BASE); await up.waitForSelector('#vazio:not(.hidden)');
+    await up.setInputFiles('#inp-backup', DIR + '/backup-inventado.json');
+    await up.click('[data-act="confirmar-restaurar"]'); await up.waitForSelector('#semdono:not(.hidden)');
+    await up.setInputFiles('#inp-file', DIR + '/Nubank_2026-12-11.csv');
+    await esperarTexto(up, '#upload', /já está no app/);
+    ok(!(await up.$('#upload [data-act="confirmar-upload"]')) && /nada novo/.test(await up.$eval('#upload', (e) => e.innerText)), 'mesma fatura de novo: o app avisa que não tem nada novo');
+    ok(/Compras de 19\/11 a 28\/11/.test(await up.$eval('#upload', (e) => e.innerText)), 'mostra o período das compras do arquivo');
+    await up.screenshot({ path: DIR + '/tela-mesma-fatura.png' });
+    await up.fill('#inp-venc', '2027-02-11');
+    await esperarTexto(up, '#upload', /Fatura nova: Vencimento 11\/02\/2027/);
+    await up.click('[data-act="confirmar-upload"]'); await esperar(300);
+    ok((await faturaVista(up)).includes('11/02/2027') && (await up.$$eval('#sel-fatura option', (o) => o.length)) === 2, 'trocar a data salva como fatura nova e mostra ela');
+    await up.setInputFiles('#inp-file', DIR + '/mais/Nubank_2026-12-11.csv');
+    await esperarTexto(up, '#upload', /Atualizar a fatura/);
+    ok(/entram 1 linha nova/.test(await up.$eval('#upload', (e) => e.innerText)), 'arquivo com uma compra a mais: avisa que entra 1 linha nova');
+    await up.click('[data-act="confirmar-upload"]'); await esperar(300);
+    ok((await faturaVista(up)).includes('11/12/2026') && /Sorveteria/.test(await up.$eval('#semdono', (e) => e.innerText)), 'depois de atualizar, mostra a fatura com a compra nova');
 
     const erros = paginas.flatMap((p) => p.erros);
     ok(!erros.length, 'console sem erros' + (erros.length ? ': ' + erros.join(' | ') : ''));
