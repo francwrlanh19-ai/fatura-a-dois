@@ -141,6 +141,14 @@ summary .s-left { flex: 1; }
 .nv-dot.bad { background: var(--bad); }
 .txt-erro { color: var(--bad); }
 .inp-link { width: 100%; }
+.desfazer { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: min(520px, calc(100% - 24px)); display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-radius: 12px;
+  background: var(--ink); color: var(--bg); box-shadow: 0 6px 24px rgba(0,0,0,.22); font-size: 14px; }
+.desfazer .dz-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.desfazer .dz-btn { font: 800 14px/1 var(--font-b); background: transparent; color: var(--bg); text-decoration: underline; text-underline-offset: 3px;
+  border: 0; padding: 10px; min-height: 40px; cursor: pointer; border-radius: 8px; }
+.desfazer .dz-x { font: 400 20px/1 var(--font-b); background: transparent; color: var(--bg); opacity: .7; border: 0; width: 40px; height: 40px; cursor: pointer; border-radius: 8px; }
+.desfazer button:focus-visible { outline: 2px solid var(--bg); outline-offset: 1px; }
 .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 20px; text-align: center; color: var(--muted); }
 .drop.over { border-color: var(--accent); color: var(--ink); }
 label.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
@@ -226,6 +234,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   <section id="pagamentos" class="card hidden"></section>
   <section id="ajustes" class="card hidden"></section>
   <section id="nuvem" class="card hidden"></section>
+  <div id="desfazer" class="desfazer hidden" role="status" aria-live="polite"></div>
 
   <footer>
     <p id="rodape-dados">Os dados ficam guardados só neste celular, dentro do navegador. Nada vai pra internet. Faça um backup de vez em quando (em “Backup”, lá embaixo) e guarde o arquivo.</p>
@@ -260,7 +269,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     carregou: { faturas: false, regras: false }, lento: false, aiBusy: false, aiMsg: "",
     upload: null, uploadErro: "", erroEscrita: "", abrirDiv: null, copiado: null, textoCopia: null, removendo: null,
     podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "", soLeitura: false,
-    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null,
+    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, abertos: new Set(),
   };
 
   // ---------- texto ----------
@@ -462,21 +471,85 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     render();
   }
 
+  // ---------- desfazer ----------
+  // Cada escolha guarda como as linhas (e a regra aprendida) estavam antes; "Desfazer" volta a última.
+  const pilhaDesfazer = [];
+  let mostrarDesfazer = false, timerDesfazer = null;
+  const estadoDono = (l) => ({ i: l.i, dono: l.dono || null, via: l.via || null, divisao: Array.isArray(l.divisao) ? l.divisao.slice() : null });
+  const curta = (s) => { s = String(s || ""); return s.length > 30 ? s.slice(0, 29) + "…" : s; };
+  function registrarAcao(acao) {
+    pilhaDesfazer.push(acao); if (pilhaDesfazer.length > 50) pilhaDesfazer.shift();
+    mostrarDesfazer = true; clearTimeout(timerDesfazer);
+    timerDesfazer = setTimeout(() => { mostrarDesfazer = false; desenharDesfazer(); }, 10000);
+  }
+  function desfazerUltima() {
+    if (S.readOnly) return;
+    const a = pilhaDesfazer.pop(); if (!a) return;
+    const f = S.faturas.get(a.fid);
+    if (f) {
+      for (const s of a.linhas || []) {
+        const l = f.linhas.find((x) => x.i === s.i); if (!l) continue;
+        if (s.dono) l.dono = s.dono; else delete l.dono;
+        if (s.via) l.via = s.via; else delete l.via;
+        if (s.divisao) l.divisao = s.divisao.slice(); else delete l.divisao;
+      }
+      if (a.pag) { const l = f.linhas.find((x) => x.i === a.pag.i); if (l) { delete l.pagoPorEle; if (a.pag.antes) l.pagoPor = a.pag.antes; else delete l.pagoPor; } }
+      f.atualizadoEm = new Date().toISOString();
+      salvarFatura(a.fid);
+    }
+    if (a.regra) {
+      const { id, antes } = a.regra;
+      if (antes) {
+        const d = { padrao: antes.padrao, dono: antes.dono, criadoEm: antes.criadoEm || new Date().toISOString() };
+        if (Array.isArray(antes.divisao)) d.divisao = antes.divisao.slice();
+        S.regras.set(id, { id, ...d });
+        if (S.db) enfileirar(() => S.db.doc("regras/" + id).set(d));
+      } else apagarRegra(id);
+    }
+    clearTimeout(timerDesfazer);
+    mostrarDesfazer = pilhaDesfazer.length > 0;
+    if (mostrarDesfazer) timerDesfazer = setTimeout(() => { mostrarDesfazer = false; desenharDesfazer(); }, 10000);
+    S.abrirDiv = null; S.atual = a.fid;
+    render();
+  }
+  function desenharDesfazer() {
+    const el = $("#desfazer");
+    const a = pilhaDesfazer[pilhaDesfazer.length - 1];
+    const ver = !!a && mostrarDesfazer && !S.readOnly;
+    el.classList.toggle("hidden", !ver);
+    if (!ver) return;
+    fill(el, h("span", { class: "dz-txt", text: a.texto }),
+      h("button", { type: "button", class: "dz-btn", "data-act": "desfazer", text: "Desfazer" }),
+      h("button", { type: "button", class: "dz-x", "data-act": "fechar-desfazer", "aria-label": "Fechar aviso", text: "×" }));
+  }
+
   // ---------- ações ----------
   function definir(fid, i, dono, via, divisao) {
     if (S.readOnly) return;
     const f = S.faturas.get(fid); if (!f) return;
     const l = f.linhas.find((x) => x.i === i); if (!l) return;
+    const antes = new Map(f.linhas.map((x) => [x.i, estadoDono(x)]));
+    let regra = null;
     aplicarDono(l, dono, via || "manual", divisao);
     S.sug.delete(fid + ":" + i);
     if (dono && S.lembrar && l.tipo === "compra" && l.valor > 0 && !parcela(l.desc)) {
       const k = chave(l.desc);
+      const idRegra = slug(norm(k)), regraAntes = S.regras.has(idRegra) ? clone(S.regras.get(idRegra)) : null;
       salvarRegra(k, dono, l.divisao);
+      const regraDepois = S.regras.has(idRegra) ? S.regras.get(idRegra) : null;
+      if (JSON.stringify(regraAntes) !== JSON.stringify(regraDepois)) regra = { id: idRegra, antes: regraAntes };
       for (const o of f.linhas) {
         if (o !== l && o.tipo === "compra" && !temDono(o) && o.valor > 0 && !parcela(o.desc) && norm(o.desc).includes(k)) {
           aplicarDono(o, dono, "regra", l.divisao); S.sug.delete(fid + ":" + o.i);
         }
       }
+    }
+    const mudadas = f.linhas.filter((x) => JSON.stringify(estadoDono(x)) !== JSON.stringify(antes.get(x.i))).map((x) => antes.get(x.i));
+    if (mudadas.length || regra) {
+      const outras = mudadas.filter((s) => s.i !== i).length;
+      registrarAcao({ fid, linhas: mudadas, regra,
+        texto: temDono(l) ? `“${curta(l.desc)}” → ${rotuloDono(l)}` + (outras ? ` (e mais ${outras} parecida${outras > 1 ? "s" : ""})` : "")
+          : `“${curta(l.desc)}” voltou para Sem dono` });
     }
     f.atualizadoEm = new Date().toISOString();
     salvarFatura(fid); render();
@@ -491,6 +564,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   function definirPagador(fid, i, quem) {
     if (S.readOnly) return;
     const f = S.faturas.get(fid); const l = f && f.linhas.find((x) => x.i === i); if (!l) return;
+    const antes = l.pagoPor || (l.pagoPorEle ? "ele" : null);
+    if ((quem || null) !== antes) registrarAcao({ fid, pag: { i, antes }, texto: `Pagamento de ${fmt(Math.abs(l.valor))} → ${quem && pessoa(quem) ? nome(quem) : "não marcado"}` });
     if (quem && pessoa(quem)) l.pagoPor = quem; else delete l.pagoPor;
     delete l.pagoPorEle;
     f.atualizadoEm = new Date().toISOString();
@@ -663,6 +738,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
         h("input", { type: "checkbox", class: "chk-div", value: p.id, checked: marcados.has(p.id) }), p.nome))),
       h("div", { class: "controls" },
         h("button", { type: "button", class: "btn small-btn primary", "data-act": "confirmar-div", "data-fid": fid, "data-i": l.i, text: "Dividir" }),
+        l.dono === "dividir" && divisaoDe(l) ? h("button", { type: "button", class: "btn small-btn", "data-act": "tirar-div", "data-fid": fid, "data-i": l.i, text: "Voltar para Sem dono" }) : null,
         h("button", { type: "button", class: "btn small-btn", "data-act": "fechar-div", text: "Cancelar" })));
   }
   function itemLinha(fid, l, comSug) {
@@ -682,6 +758,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   }
 
   function render() {
+    // lembra quais seções estavam abertas (lido da tela, que é o que a pessoa está vendo agora)
+    for (const d of document.querySelectorAll("details[data-abre]")) { if (d.open) S.abertos.add(d.dataset.abre); else S.abertos.delete(d.dataset.abre); }
     const sel = $("#sel-fatura");
     const ids = [...S.faturas.keys()].sort().reverse();
     if (S.atual && !S.faturas.has(S.atual)) S.atual = null;
@@ -702,6 +780,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     av.classList.toggle("hidden", !msgs.length);
     av.classList.toggle("bad", S.semDb || (S.readOnly && !S.soLeitura));
     desenharNuvemStatus();
+    desenharDesfazer();
     $("#rodape-dados").textContent = NV.ativo
       ? "Os dados ficam neste celular e numa cópia no GitHub, trancada com a senha que vai no link. Sem o link, ninguém consegue ler."
       : "Os dados ficam guardados só neste celular, dentro do navegador. Nada vai pra internet. Faça um backup de vez em quando (em “Backup”, lá embaixo) e guarde o arquivo.";
@@ -785,9 +864,10 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     const temSug = pend.some((l) => S.sug.has(fid + ":" + l.i));
     fill($("#semdono"), 
       h("div", { class: "row-between" }, h("h2", { text: pend.length ? `Sem dono (${pend.length})` : "Sem dono" }),
-        pend.length && !S.readOnly ? h("div", { class: "controls" },
-          S.sample ? h("button", { type: "button", class: "btn", "data-act": "sugerir", disabled: S.aiBusy, text: S.aiBusy ? "Pensando…" : "Sugerir com IA" }) : null,
-          temSug ? h("button", { type: "button", class: "btn", "data-act": "aceitar-todas", text: "Aceitar sugestões" }) : null) : null),
+        !S.readOnly && (pend.length || pilhaDesfazer.length) ? h("div", { class: "controls" },
+          pilhaDesfazer.length ? h("button", { type: "button", class: "btn small-btn", "data-act": "desfazer", title: "Desfazer: " + pilhaDesfazer[pilhaDesfazer.length - 1].texto, text: "↶ Desfazer" }) : null,
+          pend.length && S.sample ? h("button", { type: "button", class: "btn", "data-act": "sugerir", disabled: S.aiBusy, text: S.aiBusy ? "Pensando…" : "Sugerir com IA" }) : null,
+          pend.length && temSug ? h("button", { type: "button", class: "btn", "data-act": "aceitar-todas", text: "Aceitar sugestões" }) : null) : null),
       pend.length ? h("label", { class: "toggle" }, h("input", { type: "checkbox", id: "chk-lembrar", checked: S.lembrar, disabled: S.readOnly }),
         "Lembrar minhas escolhas nas próximas faturas") : null,
       S.aiMsg ? h("p", { class: "muted small", text: S.aiMsg }) : null,
@@ -797,16 +877,18 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     // separadas
     const grupos = [...S.pessoas.map((p) => ({ id: p.id, rot: p.nome, ls: f.linhas.filter((l) => l.tipo === "compra" && l.dono === p.id) })),
       { id: "dividir", rot: "Divididas", ls: f.linhas.filter((l) => l.tipo === "compra" && l.dono === "dividir" && divisaoDe(l)) }];
-    fill($("#separadas"), h("h2", { text: "Já separadas" }), ...grupos.map((g) => {
+    fill($("#separadas"), h("h2", { text: "Já separadas" }),
+      !S.readOnly ? h("p", { class: "muted small", text: "Abra um nome para ver as compras dele. Para trocar, toque em outro nome. Para devolver uma compra para “Sem dono”, toque de novo no nome marcado." }) : null,
+      ...grupos.map((g) => {
       const ls = g.ls.sort(porData); const soma = r2(ls.reduce((a, l) => a + l.valor, 0));
-      return h("details", null, h("summary", null, h("span", { class: "s-left" }, h("span", { class: "chip", style: `${estilo(g.id)}`, text: g.rot }), ` ${ls.length} compra${ls.length === 1 ? "" : "s"}`),
+      return h("details", { "data-abre": "sep-" + g.id, open: S.abertos.has("sep-" + g.id) ? true : null }, h("summary", null, h("span", { class: "s-left" }, h("span", { class: "chip", style: `${estilo(g.id)}`, text: g.rot }), ` ${ls.length} compra${ls.length === 1 ? "" : "s"}`),
         h("span", { class: "num", text: fmt(soma) })), ls.length ? h("ul", { class: "linhas" }, ls.map((l) => itemLinha(fid, l, false))) : h("p", { class: "muted small", text: "Nada aqui." }));
     }));
 
     // pagamentos
     const pags = f.linhas.filter((l) => l.tipo === "pagamento").sort(porData);
     fill($("#pagamentos"), 
-      h("details", null, h("summary", null, h("span", { class: "s-left", text: `Pagamentos na fatura (${pags.length})` }), h("span", { class: "num", text: fmt(-pags.reduce((a, l) => a + l.valor, 0)) })),
+      h("details", { "data-abre": "pag", open: S.abertos.has("pag") ? true : null }, h("summary", null, h("span", { class: "s-left", text: `Pagamentos na fatura (${pags.length})` }), h("span", { class: "num", text: fmt(-pags.reduce((a, l) => a + l.valor, 0)) })),
         h("p", { class: "muted small", text: "Diga quem fez cada pagamento: ele abate da parte dessa pessoa. Pagamentos do começo do período costumam ser da fatura anterior." }),
         pags.length ? h("ul", { class: "linhas" }, pags.map((l) => {
           const q = l.pagoPor || (l.pagoPorEle ? "ele" : "");
@@ -831,7 +913,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     const rem = S.removendo ? pessoa(S.removendo) : null;
     const uso = rem ? contarUso(rem.id) : null;
     fill(aj, 
-      h("details", { open: S.removendo ? true : null }, h("summary", null, h("span", { class: "s-left", text: `Pessoas (${S.pessoas.length})` })),
+      h("details", { "data-abre": "pessoas", open: S.removendo || S.abertos.has("pessoas") ? true : null }, h("summary", null, h("span", { class: "s-left", text: `Pessoas (${S.pessoas.length})` })),
         h("p", { class: "muted small", text: "Todo mundo que usa o cartão. Escolha quem é a dona: ela não aparece com valor a devolver." }),
         h("ul", { class: "lista-simples" }, S.pessoas.map((p) => h("li", null,
           h("div", { class: "pessoa-row" },
@@ -849,13 +931,13 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
         S.pessoas.length < MAX_PESSOAS ? h("form", { class: "form-row", id: "form-pessoa" },
           h("input", { type: "text", id: "inp-nova-pessoa", placeholder: "Nome, ex.: Vanesca", maxlength: 30, "aria-label": "Nome da nova pessoa" }),
           h("button", { type: "submit", class: "btn", text: "Adicionar pessoa" })) : h("p", { class: "muted small", text: `Máximo de ${MAX_PESSOAS} pessoas.` })),
-      h("details", null, h("summary", null, h("span", { class: "s-left", text: "Backup" }), h("span", { class: "muted small", text: ultimoBackup() ? "último: " + dataBR(ultimoBackup().slice(0, 10)) : "nenhum ainda" })),
+      h("details", { "data-abre": "backup", open: S.abertos.has("backup") ? true : null }, h("summary", null, h("span", { class: "s-left", text: "Backup" }), h("span", { class: "muted small", text: ultimoBackup() ? "último: " + dataBR(ultimoBackup().slice(0, 10)) : "nenhum ainda" })),
         h("p", { class: "muted small", text: "Os dados ficam só neste celular. Um backup é um arquivo com tudo: pessoas, regras e faturas. Guarde ou mande pra você no WhatsApp; pra abrir em outro celular, é só restaurar lá." }),
         h("div", { class: "controls" },
           podeEnviar() ? h("button", { type: "button", class: "btn", "data-act": "backup-enviar", text: "Enviar backup" }) : null,
           h("button", { type: "button", class: "btn", "data-act": "backup-baixar", text: "Baixar backup" }),
           h("label", { class: "btn", for: "inp-backup", text: "Restaurar backup" }))),
-      h("details", null, h("summary", null, h("span", { class: "s-left", text: `O que o app já sabe (${regras.length} regras)` })),
+      h("details", { "data-abre": "regras", open: S.abertos.has("regras") ? true : null }, h("summary", null, h("span", { class: "s-left", text: `O que o app já sabe (${regras.length} regras)` })),
         h("p", { class: "muted small", text: "Quando a descrição de uma compra contém o trecho, o app separa sozinho. Parcelas seguintes de uma compra já separada também." }),
         regras.length ? h("ul", { class: "lista-simples regras" }, regras.map((r) => h("li", null,
           h("span", null, h("code", { text: r.padrao }), " → ", h("span", { class: "chip", style: `${estilo(r.dono)}`, text: donoValido(r.dono, r) ? rotuloDono(r) : "pessoa removida" })),
@@ -1577,8 +1659,11 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
       S.abrirDiv = null;
       if (ids.length === 1) definir(fid, i, ids[0], "manual");
       else if (ids.length > 1) definir(fid, i, "dividir", "manual", ids);
-      else render();
+      else definir(fid, i, null, "manual");
     }
+    else if (act === "tirar-div") { S.abrirDiv = null; definir(fid, i, null, "manual"); }
+    else if (act === "desfazer") desfazerUltima();
+    else if (act === "fechar-desfazer") { mostrarDesfazer = false; clearTimeout(timerDesfazer); desenharDesfazer(); }
     else if (act === "aba") { const alvo = b.dataset.aba === "graficos" ? "graficos" : "separar"; if (location.hash !== "#" + alvo) location.hash = alvo; else { S.view = alvo; render(); } }
     else if (act === "pessoa-graf") { if (pessoa(b.dataset.pid)) { S.pessoaGraf = b.dataset.pid; render(); } }
     else if (act === "aceitar") definir(fid, i, b.dataset.dono, "ia");

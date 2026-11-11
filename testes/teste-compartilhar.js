@@ -180,6 +180,17 @@ async function chave(pg, tok, re) {
     ok(!(await ela.$eval('#lbl-upload', (e) => e.classList.contains('hidden'))), 'depois de recarregar ela continua editando');
     ok((await semDono(ela)) === (await semDono(ele)), 'depois de recarregar nada se perdeu');
 
+    // 5b) Desfazer no compartilhado: o GitHub volta junto
+    const sdAntes = await semDono(ela);
+    antes = R.puts;
+    await ela.click('#semdono .linha:first-child .pbtn[data-dono="ela"]');
+    await ela.waitForSelector('#desfazer:not(.hidden)');
+    await ela.click('#desfazer [data-act="desfazer"]');
+    ok(await esperarSubir(ela, antes), 'desfazer no compartilhado: subiu');
+    rem = abrirRemoto();
+    const semDonoRemoto = rem['faturas/2026-12-11'].linhas.filter((l) => l.tipo === 'compra' && !l.dono).length;
+    ok((await semDono(ela)) === sdAntes && sdAntes === `Sem dono (${semDonoRemoto})`, `desfazer no compartilhado: celular e GitHub voltaram (${sdAntes})`);
+
     // 6) Dois celulares mudando ao mesmo tempo
     R.conflitoUmaVez = () => { const d = abrirRemoto(); d['regras/teste-conflito'] = { padrao: 'teste conflito', dono: 'ela', criadoEm: '2026-12-01T00:00:00.000Z' }; trancarParaRemoto(d); };
     antes = R.puts;
@@ -335,6 +346,58 @@ async function chave(pg, tok, re) {
     await cria2.click('[data-act="nuvem-criar-cancelar"]');
     await esperar(300);
     ok(R.puts === putsAntesC && !(await ls(cria2, 'fatura-a-dois:compartilhar')), 'já existe: cancelar não troca nada');
+
+    // 16) Trocar e desfazer escolhas (modo local)
+    const dz = await celular(browser, 'desfaz'); paginas.push(dz);
+    await dz.goto(BASE);
+    await dz.waitForSelector('#vazio:not(.hidden)');
+    await dz.setInputFiles('#inp-backup', DIR + '/backup-inventado.json');
+    await dz.click('[data-act="confirmar-restaurar"]');
+    await dz.waitForSelector('#semdono:not(.hidden)');
+    const n0 = await semDono(dz);
+    const nRegras = () => dz.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('fatura-a-dois:v1') || '{}')).filter((k) => k.startsWith('regras/')).length);
+    const r0 = await nRegras();
+    await dz.click('#semdono .linha:first-child .pbtn[data-dono="ele"]');
+    await dz.waitForSelector('#desfazer:not(.hidden)');
+    const txtBarra = await dz.$eval('#desfazer .dz-txt', (e) => e.textContent);
+    ok(/→ Beto/.test(txtBarra), 'a barra mostra o que foi feito: ' + txtBarra);
+    await esperar(300);
+    ok((await nRegras()) === r0 + 1, 'a escolha ensinou uma regra');
+    await dz.click('#desfazer [data-act="desfazer"]');
+    await esperar(1200);
+    ok((await semDono(dz)) === n0 && (await nRegras()) === r0, `desfazer pela barra: a compra voltou e a regra saiu (${await semDono(dz)})`);
+    ok(await dz.$eval('#desfazer', (e) => e.classList.contains('hidden')), 'sem nada para desfazer, a barra some');
+    await dz.click('#semdono .linha:first-child .pbtn[data-dono="ela"]');
+    await dz.click('#semdono .linha:first-child .pbtn[data-dono="p-carla"]');
+    const n2 = await semDono(dz);
+    await dz.click('#semdono [data-act="desfazer"]');
+    await dz.click('#semdono [data-act="desfazer"]');
+    ok((await semDono(dz)) === n0, `dois "Desfazer" seguidos voltam as duas (${n2} → ${await semDono(dz)})`);
+    const linhasDe = (id) => dz.$$eval(`#separadas details[data-abre="sep-${id}"] .linha`, (ls) => ls.length);
+    const beto0 = await linhasDe('ele'), ana0 = await linhasDe('ela');
+    await dz.click('#separadas details[data-abre="sep-ele"] summary');
+    await dz.click('#separadas details[data-abre="sep-ele"] .linha:first-child .pbtn[data-dono="ela"]');
+    ok((await linhasDe('ele')) === beto0 - 1 && (await linhasDe('ela')) === ana0 + 1, 'trocar uma compra já separada: saiu de Beto e foi para Ana');
+    ok(await dz.$eval('#separadas details[data-abre="sep-ele"]', (d) => d.open), 'o grupo continua aberto depois de trocar');
+    const sdAntesTirar = await semDono(dz);
+    await dz.click('#separadas details[data-abre="sep-ela"] summary');
+    await dz.click('#separadas details[data-abre="sep-ela"] .linha:first-child .pbtn[aria-pressed="true"]');
+    ok((await semDono(dz)) !== sdAntesTirar && (await linhasDe('ela')) === ana0, `tocar de novo no nome marcado devolve para Sem dono (${sdAntesTirar} → ${await semDono(dz)})`);
+    const sdAntesDiv = await semDono(dz);
+    await dz.click('#separadas details[data-abre="sep-dividir"] summary');
+    await dz.click('#separadas details[data-abre="sep-dividir"] .linha:first-child [data-act="abrir-div"]');
+    await dz.click('[data-act="tirar-div"]');
+    ok((await semDono(dz)) !== sdAntesDiv && (await linhasDe('dividir')) === 0, 'compra dividida: "Voltar para Sem dono" funciona');
+    await dz.click('[data-abre="pag"] summary');
+    await dz.selectOption('.sel-pagador', 'ele');
+    ok(/Pagamento de R\$\s?100,00 → Beto/.test(await dz.$eval('#desfazer .dz-txt', (e) => e.textContent)), 'pagamento também pode ser desfeito');
+    await dz.click('#desfazer [data-act="desfazer"]');
+    ok((await dz.$eval('.sel-pagador', (s) => s.value)) === '' && (await dz.$eval('[data-abre="pag"]', (d) => d.open)), 'desfazer o pagamento: voltou para "Não marcado"');
+    await dz.screenshot({ path: DIR + '/tela-desfazer.png', fullPage: true });
+    const sdFinal = await semDono(dz);
+    await esperar(1200);
+    await dz.reload(); await dz.waitForSelector('#semdono:not(.hidden)');
+    ok((await semDono(dz)) === sdFinal, 'depois de recarregar, as trocas continuam (' + sdFinal + ')');
 
     const erros = paginas.flatMap((p) => p.erros);
     ok(!erros.length, 'console sem erros' + (erros.length ? ': ' + erros.join(' | ') : ''));
