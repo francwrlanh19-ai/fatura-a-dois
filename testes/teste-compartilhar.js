@@ -24,7 +24,7 @@ const K_PEND = 'fatura-a-dois:compartilhado:pendentes';
 const novoSha = () => crypto.randomBytes(20).toString('hex');
 const R = { existe: true, sha: novoSha(), texto: fs.readFileSync(DIR + '/semente-teste.json', 'utf8'), ramo: true, limite: false, offline: false,
   conflitoUmaVez: null, puts: 0, gets: 0, rawGets: 0, chaveNoRaw: false, log: [] };
-function abrirRemoto() { fs.writeFileSync(DIR + '/remoto.json', R.texto); return JSON.parse(execFileSync('python3', [CIFRA, 'abrir', SENHA, DIR + '/remoto.json']).toString()); }
+function abrirRemoto(senha) { fs.writeFileSync(DIR + '/remoto.json', R.texto); return JSON.parse(execFileSync('python3', [CIFRA, 'abrir', senha || SENHA, DIR + '/remoto.json'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString()); }
 function trancarParaRemoto(dados) {
   fs.writeFileSync(DIR + '/dados-in.json', JSON.stringify(dados));
   execFileSync('python3', [CIFRA, 'trancar', SENHA, DIR + '/dados-in.json', DIR + '/dados-out.json']);
@@ -283,6 +283,58 @@ async function chave(pg, tok, re) {
     await esperar(300);
     const copiado = await ela.evaluate(() => navigator.clipboard.readText());
     ok(copiado === BASE + '#k=' + SENHA, 'copiar o link: ' + copiado);
+
+    // 15) Criar o link a partir dos dados deste celular (primeira vez: sem a branch "dados")
+    R.ramo = false; R.existe = false;
+    const cria = await celular(browser, 'cria'); paginas.push(cria);
+    await cria.goto(BASE);
+    await cria.waitForSelector('#vazio:not(.hidden)');
+    ok(!(await cria.$('#det-criar')), 'sem fatura no celular, não aparece "Compartilhar esta fatura"');
+    await cria.setInputFiles('#inp-backup', DIR + '/backup-inventado.json');
+    await cria.click('[data-act="confirmar-restaurar"]');
+    await cria.waitForSelector('#det-criar');
+    await cria.click('#det-criar summary');
+    await cria.screenshot({ path: DIR + '/tela-criar.png', fullPage: true });
+    await cria.fill('#inp-chave-criar', TOK_RUIM); await cria.click('#form-criar button[type=submit]');
+    await esperarTexto(cria, '#nuvem', /não aceitou essa chave/);
+    ok(!R.existe && !(await ls(cria, 'fatura-a-dois:compartilhar')), 'criar com chave inválida: nada muda');
+    await cria.fill('#inp-chave-criar', TOK_BOM);
+    await Promise.all([cria.waitForNavigation(), cria.click('#form-criar button[type=submit]')]);
+    await esperarTexto(cria, '#nuvem-status', /Tudo salvo/);
+    ok(/Link criado/.test(await cria.$eval('#nuvem', (e) => e.innerText)), 'criar link: avisa que o link foi criado e mostra como mandar');
+    const cfgCria = JSON.parse(await ls(cria, 'fatura-a-dois:compartilhar'));
+    ok(cfgCria.t === TOK_BOM && /^[A-Za-z0-9_-]{22}$/.test(cfgCria.k), 'criar link: senha nova e chave guardadas neste celular');
+    ok(R.ramo && R.existe, 'criar link: criou a branch e o arquivo');
+    const remCria = abrirRemoto(cfgCria.k);
+    ok(remCria['config/pessoas'].lista.some((p) => p.nome === 'Beto') && !!remCria['faturas/2026-12-11'], 'criar link: os dados deste celular foram, trancados com a senha nova');
+    let senhaVelhaAbre = true; try { abrirRemoto(SENHA); } catch (_) { senhaVelhaAbre = false; }
+    ok(!senhaVelhaAbre, 'a senha antiga não abre o arquivo novo');
+    await abrirNuvem(cria);
+    await cria.click('[data-act="nuvem-copiar"]'); await esperar(300);
+    const linkNovo = await cria.evaluate(() => navigator.clipboard.readText());
+    ok(linkNovo === BASE + '#k=' + cfgCria.k, 'criar link: "Copiar o link" traz o link novo');
+    const viu = await celular(browser, 'viu'); paginas.push(viu);
+    await viu.goto(linkNovo);
+    await esperarTexto(viu, '#nuvem-status', /só vendo/);
+    ok((await tiles(viu)).some((t) => t.includes('Beto')), 'o link novo abre em outro celular');
+    await cria.click('#semdono .linha:first-child .pbtn[data-dono="ele"]');
+    const antes15 = R.puts;
+    ok(await esperarSubir(cria, antes15 - 1 < 0 ? 0 : antes15), 'quem criou o link já edita e sobe');
+    await viu.click('[data-act="nuvem-atualizar"]'); await esperar(1000);
+    ok((await semDono(viu)) === (await semDono(cria)), 'e o outro celular vê a mudança');
+    // já existe: pede confirmação antes de trocar a senha
+    const cria2 = await celular(browser, 'cria2'); paginas.push(cria2);
+    await cria2.goto(BASE);
+    await cria2.setInputFiles('#inp-backup', DIR + '/backup-inventado-2.json');
+    await cria2.click('[data-act="confirmar-restaurar"]');
+    await cria2.waitForSelector('#det-criar');
+    await cria2.click('#det-criar summary');
+    await cria2.fill('#inp-chave-criar', TOK_BOM); await cria2.click('#form-criar button[type=submit]');
+    await esperarTexto(cria2, '#nuvem', /Já existe uma fatura compartilhada/);
+    const putsAntesC = R.puts;
+    await cria2.click('[data-act="nuvem-criar-cancelar"]');
+    await esperar(300);
+    ok(R.puts === putsAntesC && !(await ls(cria2, 'fatura-a-dois:compartilhar')), 'já existe: cancelar não troca nada');
 
     const erros = paginas.flatMap((p) => p.erros);
     ok(!erros.length, 'console sem erros' + (erros.length ? ': ' + erros.join(' | ') : ''));

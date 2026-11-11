@@ -962,7 +962,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   const API = `https://api.github.com/repos/${REPO.dono}/${REPO.nome}`;
   const NV = { ativo: false, segredo: "", token: "", sha: null, sal: null, velhos: new Set(), pronto: false, buscando: false, enviando: false,
     testando: false, buscadoEm: 0, alteradoEm: null, erro: "", vazio: false, timerEnvio: null, abrir: false, confirmar: null,
-    msgChave: "", msgLink: "", copiou: false, mostrarLink: false, assinatura: "" };
+    msgChave: "", msgLink: "", copiou: false, mostrarLink: false, assinatura: "",
+    abrirCriar: false, criando: false, msgCriar: "", confirmarCriar: false, tokenCriar: "" };
   const te = new TextEncoder(), td = new TextDecoder();
   const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
   const lsLer = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
@@ -1211,6 +1212,39 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     try { await navigator.share({ title: "Fatura a dois", text: "Fatura do cartão (abre só por este link):", url: linkCompartilhado() }); }
     catch (e) { if (!e || e.name !== "AbortError") copiarLink(); }
   }
+  const b64url = (bytes) => b64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  // Cria o link a partir dos dados deste celular: senha nova, sobe tudo trancado e o celular passa a editar.
+  async function criarCompartilhamento(valor, mesmoAssim) {
+    const t = String(valor || "").trim();
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(t)) { NV.msgCriar = "Isso não parece uma chave do GitHub. Ela começa com github_pat_ (copie a chave inteira)."; desenharNuvem(); return; }
+    NV.criando = true; NV.msgCriar = ""; NV.confirmarCriar = false; NV.tokenCriar = t; desenharNuvem();
+    let indo = false;
+    try {
+      NV.token = t;
+      const res = await pedir(`${API}/contents/${ARQ}?ref=${RAMO}`, { headers: cabecalhos(true), cache: "no-store" });
+      if (res.status === 401) throw { code: "chave" };
+      let sha = null;
+      if (res.ok) sha = (await res.json()).sha || null;
+      else if (res.status !== 404) throw { code: res.status === 403 ? "permissao" : "http" };
+      if (sha && !mesmoAssim) { NV.confirmarCriar = true; return; }
+      const senha = b64url(crypto.getRandomValues(new Uint8Array(16)));
+      NV.segredo = senha;
+      const dados = S.db.exportar();
+      const arq = await trancar(dados, null);
+      let r = await gravarRemoto(arq, sha);
+      if (r.semRamo) { await criarRamo(); r = await gravarRemoto(arq, null); }
+      if (r.conflito || r.semRamo) throw { code: "http" };
+      gravarCfg({ k: senha, t }); lsGravar(K_CACHE, JSON.stringify(dados)); lsGravar(K_PEND, null);
+      try { sessionStorage.setItem("fatura-a-dois:linkNovo", "1"); } catch (_) { /* ignora */ }
+      indo = true; location.reload();
+    } catch (e) {
+      const code = (e && e.code) || "http";
+      NV.msgCriar = code === "chave" ? "O GitHub não aceitou essa chave. Confira se copiou ela inteira, ou crie outra."
+        : code === "rede" ? "Sem internet agora. Tente de novo quando conectar." : textoErroNuvem(code);
+    } finally {
+      if (!indo) { NV.token = ""; NV.segredo = ""; NV.criando = false; desenharNuvem(); }
+    }
+  }
   function abrirLinkColado(txt) {
     const s = String(txt || "").trim();
     const m = /#k=([A-Za-z0-9_-]{16,64})/.exec(s) || /^([A-Za-z0-9_-]{16,64})$/.exec(s);
@@ -1255,11 +1289,26 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     const pend = nPend();
     const locais = NV.ativo && NV.token ? dadosLocaisAntigos() : null;
     const temLocais = !!locais && !mesmosDados(locais, S.db.exportar());
-    const ass = JSON.stringify([NV.ativo, !!NV.token, NV.abrir, NV.confirmar, NV.msgChave, NV.msgLink, NV.testando, NV.copiou, NV.mostrarLink, pend > 0, temLocais]);
+    const temFaturas = S.faturas.size > 0;
+    const ass = JSON.stringify([NV.ativo, !!NV.token, NV.abrir, NV.confirmar, NV.msgChave, NV.msgLink, NV.testando, NV.copiou, NV.mostrarLink, pend > 0, temLocais,
+      NV.abrirCriar, NV.criando, NV.msgCriar, NV.confirmarCriar, temFaturas]);
     if (ass === NV.assinatura) return;
     NV.assinatura = ass;
     if (!NV.ativo) {
-      fill(el, h("details", { id: "det-nuvem", open: NV.abrir || NV.msgLink ? true : null },
+      fill(el, temFaturas ? h("details", { id: "det-criar", open: NV.abrirCriar || NV.msgCriar || NV.criando || NV.confirmarCriar ? true : null },
+        h("summary", null, h("span", { class: "s-left", text: "Compartilhar esta fatura" })),
+        h("p", { class: "muted small", text: "Cria um link para outra pessoa ver a mesma fatura no celular dela. Os dados vão para o GitHub trancados com uma senha que só existe no link: sem o link, ninguém lê." }),
+        NV.confirmarCriar ? h("div", { class: "card notice" },
+          h("p", { text: "Já existe uma fatura compartilhada neste app. Criar um link novo troca a senha e o link antigo para de abrir." }),
+          h("div", { class: "controls" },
+            h("button", { type: "button", class: "btn primary", "data-act": "nuvem-criar-mesmo", text: "Criar link novo" }),
+            h("button", { type: "button", class: "btn", "data-act": "nuvem-criar-cancelar", text: "Cancelar" })))
+        : h("form", { class: "form-row", id: "form-criar" },
+          h("label", { class: "muted small full", for: "inp-chave-criar", text: "Chave de edição (criada no GitHub, começa com github_pat_)" }),
+          h("input", { type: "password", id: "inp-chave-criar", placeholder: "github_pat_…", autocomplete: "off", autocapitalize: "off", spellcheck: "false" }),
+          h("button", { type: "submit", class: "btn primary", disabled: NV.criando, text: NV.criando ? "Criando…" : "Criar link" })),
+        NV.msgCriar ? h("p", { class: "small txt-erro", text: NV.msgCriar }) : null) : null,
+      h("details", { id: "det-nuvem", open: NV.abrir || NV.msgLink ? true : null },
         h("summary", null, h("span", { class: "s-left", text: "Abrir a fatura compartilhada" })),
         h("p", { class: "muted small", text: "Recebeu o link da fatura compartilhada? Abra o link direto ou cole ele aqui: este celular passa a mostrar a mesma fatura de quem edita." }),
         h("form", { class: "form-row", id: "form-link" },
@@ -1554,8 +1603,13 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     else if (act === "nuvem-usar-locais") { NV.confirmar = "locais"; desenharNuvem(); }
     else if (act === "nuvem-cancelar") { NV.confirmar = null; desenharNuvem(); }
     else if (act === "nuvem-confirmar") confirmarNuvem();
+    else if (act === "nuvem-criar-mesmo") criarCompartilhamento(NV.tokenCriar, true);
+    else if (act === "nuvem-criar-cancelar") { NV.confirmarCriar = false; NV.tokenCriar = ""; desenharNuvem(); }
   });
-  document.addEventListener("toggle", (e) => { if (e.target && e.target.id === "det-nuvem") NV.abrir = e.target.open; }, true);
+  document.addEventListener("toggle", (e) => {
+    if (e.target && e.target.id === "det-nuvem") NV.abrir = e.target.open;
+    else if (e.target && e.target.id === "det-criar") NV.abrirCriar = e.target.open;
+  }, true);
   document.addEventListener("change", (ev) => {
     const t = ev.target;
     if (t.id === "sel-fatura") { S.atual = t.value; S.aiMsg = ""; S.abrirDiv = null; render(); }
@@ -1570,6 +1624,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     ev.preventDefault();
     if (ev.target.id === "form-chave") { salvarChave($("#inp-chave").value); return; }
     if (ev.target.id === "form-link") { abrirLinkColado($("#inp-link").value); return; }
+    if (ev.target.id === "form-criar") { criarCompartilhamento($("#inp-chave-criar").value, false); return; }
     if (S.readOnly || !S.db) return;
     if (ev.target.id === "form-regra") {
       const p = $("#inp-padrao").value; const d = $("#sel-dono").value;
@@ -1592,6 +1647,12 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     senhaDaHash();
     const cfg = lerCfg();
     if (cfg) { NV.ativo = true; NV.segredo = cfg.k; NV.token = cfg.t; }
+    try {
+      if (cfg && sessionStorage.getItem("fatura-a-dois:linkNovo")) {
+        sessionStorage.removeItem("fatura-a-dois:linkNovo");
+        NV.abrir = true; NV.msgChave = "Link criado! Toque em “Enviar o link” (ou “Copiar o link”) e mande para quem vai ver a fatura.";
+      }
+    } catch (_) { /* ignora */ }
     // a fatura compartilhada fica guardada separada dos dados só deste celular
     const db = criarBanco(cfg ? K_CACHE : K_LOCAL, marcarPendentes);
     if (!db) { S.semDb = true; render(); return; }
