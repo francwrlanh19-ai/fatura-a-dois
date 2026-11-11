@@ -1,0 +1,3 @@
+# Dados pessoais nunca vão para o repositório
+*.csv
+*backup*.json
