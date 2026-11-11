@@ -7,6 +7,7 @@
     - Sem chave do GitHub, o celular só vê e relê a cada 2 minutos.
     - Com uma chave fine-grained (Contents: Read and write, só neste repositório), ele edita e grava pela API (`PUT contents`), juntando com o que mudou no GitHub.
     - No celular ficam `fatura-a-dois:compartilhar` (`{k: senha, t: chave}`), `fatura-a-dois:compartilhado` (a cópia) e `fatura-a-dois:compartilhado:pendentes`.
+    - O link nasce no próprio app: em "Compartilhar esta fatura", quem tem os dados cola a chave, e o app gera a senha no celular e sobe tudo. Não subir dados reais por fora, nem cifrados.
 - Nunca commitar CSV de fatura, arquivo de backup, a senha do link nem uma chave do GitHub. O `.gitignore` já bloqueia CSV e backup.
   - O único dado de verdade no repositório é o `dados.json` cifrado da branch `dados`, que o app grava sozinho.
   - Não apagar essa branch nem editar o arquivo à mão. Para trocar o conteúdo, use `testes/cifra.py`.

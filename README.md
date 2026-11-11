@@ -15,6 +15,7 @@ Sem o link de compartilhamento, os dados ficam só no celular de quem usa, dentr
 
 Com o link de compartilhamento (ele termina em `#k=` e uma senha), qualquer celular mostra a mesma fatura. Os dados ficam no arquivo `dados.json` da branch `dados`, trancados com a senha do link: sem o link, ninguém consegue ler.
 
+- Para criar o link: no celular que tem a fatura, abra **Compartilhar esta fatura** (lá embaixo), cole a chave do GitHub e toque em **Criar link**.
 - Quem só tem o link, só vê. A fatura se atualiza sozinha.
-- Para editar, cole uma chave do GitHub em **Compartilhamento → Chave de edição**. A chave fica só no celular de quem edita.
+- Para editar em outro celular, abra o link e cole a mesma chave em **Compartilhamento → Chave de edição**. A chave fica só no celular de quem edita.
 - Para criar a chave, use github.com/settings/personal-access-tokens/new. Dê acesso só a este repositório, com **Contents: Read and write**.
