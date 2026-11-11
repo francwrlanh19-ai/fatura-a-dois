@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fatura a dois</title>
+<meta name="theme-color" content="#1E6B57">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: uma coluna; resumo por pessoa no topo, "sem dono" logo abaixo como a tarefa do dia. */
+:root {
+  --bg: #F3F5F2;
+  --surface: #FFFFFF;
+  --ink: #18201D;
+  --muted: #5A6762;
+  --line: #DAE2DD;
+  --accent: #1E6B57;
+  --accent-ink: #FFFFFF;
+  --div: #5C7A1C;
+  --warn: #9A5B06;
+  --bad: #B42318;
+  --on-pc: #FFFFFF;
+  --c0: #2a78d6; --c1: #eb6834; --c2: #1baf7a; --c3: #eda100;
+  --c4: #e87ba4; --c5: #008300; --c6: #6250d6; --c7: #e34948;
+  --t0: #ffffff; --t1: #ffffff; --t2: #ffffff; --t3: #0b0b0b; --t4: #ffffff; --t5: #ffffff; --t6: #ffffff; --t7: #ffffff;
+  --sem: #b9b7af; --div-t: #ffffff;
+  --font-d: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-b: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1412; --surface: #18201C; --ink: #E6EEE9; --muted: #98A6A0; --line: #2A3530;
+    --accent: #58BA9A; --accent-ink: #0A1310; --div: #AECB5E; --warn: #E3A63F; --bad: #F2776C; --on-pc: #0F1412;
+    --c0: #3987e5; --c1: #d95926; --c2: #199e70; --c3: #c98500; --c4: #d55181; --c5: #008300; --c6: #9085e9; --c7: #e66767;
+    --t3: #ffffff; --sem: #5c5b56; --div-t: #0F1412;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1412; --surface: #18201C; --ink: #E6EEE9; --muted: #98A6A0; --line: #2A3530;
+  --accent: #58BA9A; --accent-ink: #0A1310; --div: #AECB5E; --warn: #E3A63F; --bad: #F2776C; --on-pc: #0F1412;
+  --c0: #3987e5; --c1: #d95926; --c2: #199e70; --c3: #c98500; --c4: #d55181; --c5: #008300; --c6: #9085e9; --c7: #e66767;
+  --t3: #ffffff; --sem: #5c5b56; --div-t: #0F1412;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--font-b); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 16px; }
+h1, h2 { font-family: var(--font-d); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 26px; }
+h2 { font-size: 18px; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.num { font-variant-numeric: tabular-nums; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
+.top-left { display: grid; gap: 4px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, input[type="text"], textarea {
+  font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; min-height: 40px;
+}
+textarea { width: 100%; min-height: 140px; font-size: 13px; }
+.btn {
+  font: 600 14px/1 var(--font-b); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 8px; padding: 10px 14px; min-height: 40px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn.small-btn { font-size: 13px; padding: 7px 10px; min-height: 32px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, .pbtn:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+.notice { border-left: 4px solid var(--warn); }
+.notice.bad { border-left-color: var(--bad); }
+#resumo { display: grid; gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--pc, var(--line)); border-radius: 12px;
+  padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.tile .lbl { font-size: 13px; color: var(--muted); }
+.tile .val { font: 700 22px/1.2 var(--font-d); }
+.tile .sub { font-size: 13px; color: var(--muted); }
+.tile .btn { justify-self: start; margin-top: 6px; }
+.tile.sem { --pc: var(--warn); }
+.tile.sem.zero { --pc: var(--div); }
+.bar { height: 8px; border-radius: 99px; overflow: hidden; display: flex; gap: 2px; }
+.bar span { display: block; height: 100%; background: var(--pc); }
+.row-between { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+ul.linhas { list-style: none; margin: 0; padding: 0; display: grid; }
+.linha { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
+.linha:first-child { border-top: 0; }
+.ln-info { display: grid; gap: 1px; min-width: 0; }
+.ln-desc { font-weight: 600; overflow-wrap: anywhere; }
+.ln-meta { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ln-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.ln-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.pbtn { font: 600 13px/1 var(--font-b); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 99px; padding: 8px 12px; min-height: 34px; cursor: pointer; }
+.pbtn[aria-pressed="true"] { background: var(--pc); border-color: var(--pc); color: var(--pt, var(--on-pc)); }
+.pbtn.div { --pc: var(--div); }
+.pbtn:disabled { cursor: default; opacity: .6; }
+.divpick { grid-column: 1 / -1; display: grid; gap: 8px; background: color-mix(in srgb, var(--div) 10%, var(--surface)); border-radius: 8px; padding: 10px; }
+.divpick .opts { display: flex; flex-wrap: wrap; gap: 12px; }
+.sug { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 8px; padding: 6px 10px; }
+.sug b { font-weight: 700; }
+.chip { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 2px 8px; color: var(--ink);
+  background: color-mix(in srgb, var(--pc) 16%, var(--surface)); white-space: nowrap; }
+.chip::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pc); margin-right: 5px; }
+.chip.div { --pc: var(--div); }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+details:first-of-type { border-top: 0; padding-top: 0; }
+summary { cursor: pointer; font-weight: 700; display: flex; justify-content: space-between; gap: 8px; list-style: none; padding: 4px 0; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "▸"; color: var(--muted); margin-right: 6px; }
+details[open] > summary::before { content: "▾"; }
+summary .s-left { flex: 1; }
+.lista-simples { list-style: none; margin: 0; padding: 0; display: grid; }
+.lista-simples li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.lista-simples li:first-child { border-top: 0; }
+.regras code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.pessoa-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1; }
+.pessoa-row input[type="text"] { flex: 1 1 140px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); flex: none; }
+.form-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.form-row input[type="text"] { flex: 1 1 200px; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 20px; text-align: center; color: var(--muted); }
+.drop.over { border-color: var(--accent); color: var(--ink); }
+label.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.hidden { display: none !important; }
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+.tabs { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; justify-self: start; }
+.tab { font: 600 14px/1 var(--font-b); border: 0; background: transparent; color: var(--muted); padding: 10px 18px; border-radius: 8px; cursor: pointer; min-height: 40px; }
+.tab[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#graficos { display: grid; gap: 16px; }
+.chart-sub { font-size: 13px; color: var(--muted); }
+.filtro { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hbars { display: grid; gap: 6px; }
+.hbar { display: grid; grid-template-columns: minmax(96px, 36%) 1fr; gap: 10px; align-items: center; padding: 3px 0; border-radius: 6px; cursor: default; }
+.hbar .rot { font-size: 13px; display: grid; }
+.hbar .rot small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hbar .trilho { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hbar .barra { height: 14px; border-radius: 0 4px 4px 0; background: var(--pc); width: max(2px, calc((100% - 96px) * var(--f))); flex: none; }
+.hbar .val { font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cols { display: flex; align-items: flex-end; gap: 6px; border-bottom: 1px solid var(--line); }
+.col { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; border-radius: 6px 6px 0 0; cursor: default; }
+.col .cap { font-size: 12px; font-variant-numeric: tabular-nums; margin-bottom: 4px; white-space: nowrap; min-height: 15px; }
+.col .pilha { width: 24px; max-width: 80%; display: flex; flex-direction: column-reverse; gap: 2px; }
+.col .seg { display: block; width: 100%; background: var(--pc); }
+.col .pilha .seg:last-child { border-radius: 4px 4px 0 0; }
+.xlab { display: flex; gap: 6px; }
+.xlab span { flex: 1 1 0; min-width: 0; text-align: center; font-size: 12px; color: var(--muted); display: grid; line-height: 1.25; padding-top: 4px; font-variant-numeric: tabular-nums; }
+.xlab small { font-size: 11px; white-space: pre-line; }
+.hbar:hover, .hbar:focus-visible, .col:hover, .col:focus-visible { background: color-mix(in srgb, var(--ink) 6%, transparent); outline: none; }
+.legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.leg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--pc); margin-right: 6px; vertical-align: -1px; }
+.tabela summary { font-weight: 600; font-size: 13px; color: var(--muted); }
+.tab-wrap { overflow-x: auto; }
+.tabela table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 6px; }
+.tabela th, .tabela td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabela .n { text-align: right; font-variant-numeric: tabular-nums; }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; display: grid; gap: 2px; max-width: 260px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+.tip strong { font-size: 15px; }
+.tip span { opacity: .85; }
+@media (max-width: 560px) { h1 { font-size: 23px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="top-left">
+      <h1>Fatura a dois</h1>
+      <p class="muted small">Cartão dela: quem gastou o quê, e quanto cada um tem que devolver.</p>
+    </div>
+    <div class="controls">
+      <label for="sel-fatura" class="muted small">Fatura</label>
+      <select id="sel-fatura" aria-label="Escolher fatura"></select>
+      <label class="btn primary" id="lbl-upload" for="inp-file">Subir CSV da fatura</label>
+      <input id="inp-file" type="file" accept=".csv,text/csv" class="hidden">
+      <input id="inp-backup" type="file" accept=".json,application/json" class="hidden">
+    </div>
+  </header>
+
+  <nav id="abas" class="tabs hidden" aria-label="Telas do app">
+    <button type="button" class="tab" data-act="aba" data-aba="separar" aria-pressed="true">Separar</button>
+    <button type="button" class="tab" data-act="aba" data-aba="graficos" aria-pressed="false">Gráficos</button>
+  </nav>
+  <section id="aviso" class="card notice hidden" role="status"></section>
+  <section id="upload" class="card hidden" aria-live="polite"></section>
+  <section id="copia" class="card hidden"></section>
+
+  <section id="vazio" class="card hidden">
+    <h2>Nenhuma fatura ainda</h2>
+    <p>No app do Nubank, abra a fatura, exporte em CSV e suba o arquivo aqui. O app separa sozinho o que já conhece e pergunta só o resto.</p>
+    <div class="drop" id="drop1">Arraste o CSV para cá ou use o botão “Subir CSV da fatura”.</div>
+    <div class="controls"><label class="btn" for="inp-backup">Restaurar um backup</label></div>
+    <p class="muted small">Já usava o app em outro celular? Toque em “Restaurar um backup” e escolha o arquivo .json.</p>
+    <p id="vazio-dica" class="muted small hidden">Não está vendo a fatura que já foi lançada? Seu acesso pode ser só de visualização. Peça para quem criou o app te convidar por e-mail com permissão de edição (“Pode editar”).</p>
+  </section>
+
+  <section id="resumo" class="hidden" aria-label="Resumo da fatura"></section>
+  <section id="graficos" class="hidden" aria-label="Gráficos"></section>
+  <section id="semdono" class="card hidden"></section>
+  <section id="separadas" class="card hidden"></section>
+  <section id="pagamentos" class="card hidden"></section>
+  <section id="ajustes" class="card hidden"></section>
+
+  <footer>
+    <p>Os dados ficam guardados só neste celular, dentro do navegador. Nada vai pra internet. Faça um backup de vez em quando (em “Backup”, lá embaixo) e guarde o arquivo.</p>
+    <p>As outras pessoas não precisam abrir o app: use “Copiar resumo” e mande a parte de cada uma.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const fmt = (v) => BRL.format(v || 0);
+  const $ = (s) => document.querySelector(s);
+  function h(tag, attrs, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === "class") e.className = v;
+      else if (k === "text") e.textContent = v;
+      else e.setAttribute(k, v === true ? "" : String(v));
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) e.append(kid);
+    return e;
+  }
+  function fill(el, ...kids) { el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false)); }
+  const PALETA = 8, MAX_PESSOAS = 8;
+
+  const S = {
+    db: null, sample: null, user: null, readOnly: false, semDb: false,
+    pessoas: [{ id: "ele", nome: "Ele" }, { id: "ela", nome: "Ela" }], dona: "ela", temPessoas: false,
+    regras: new Map(), faturas: new Map(), atual: null, sug: new Map(), lembrar: true,
+    carregou: { faturas: false, regras: false }, lento: false, aiBusy: false, aiMsg: "",
+    upload: null, uploadErro: "", erroEscrita: "", abrirDiv: null, copiado: null, textoCopia: null, removendo: null,
+    podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "",
+    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null,
+  };
+
+  // ---------- texto ----------
+  function norm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim(); }
+  const PARC = /\s*-\s*(?:parcela\s*)?(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i;
+  function parcela(desc) {
+    const m = String(desc).match(PARC);
+    return m ? { n: +m[1], tot: +m[2], base: norm(String(desc).slice(0, m.index)) } : null;
+  }
+  function chave(desc) { const p = parcela(desc); return p ? p.base : norm(desc); }
+  function slug(s) { return norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "regra"; }
+  function dataBR(iso) { const [y, m, d] = String(iso).split("-"); return d && m && y ? `${d}/${m}/${y}` : iso; }
+  function diaMes(iso) { const [, m, d] = String(iso).split("-"); return d && m ? `${d}/${m}` : iso; }
+  const r2 = (x) => Math.round(x * 100) / 100;
+
+  // ---------- pessoas ----------
+  const pessoa = (id) => S.pessoas.find((p) => p.id === id);
+  const corDe = (id) => { if (id === "dividir") return "var(--div)"; const k = S.pessoas.findIndex((p) => p.id === id); return k < 0 ? "var(--sem)" : `var(--c${k % PALETA})`; };
+  const estilo = (id) => { if (id === "dividir") return "--pc:var(--div);--pt:var(--div-t)"; const k = S.pessoas.findIndex((p) => p.id === id); return k < 0 ? "--pc:var(--sem);--pt:#ffffff" : `--pc:var(--c${k % PALETA});--pt:var(--t${k % PALETA})`; };
+  const nome = (id) => (id === "dividir" ? "Dividir" : (pessoa(id) || {}).nome || "?");
+  const divPadrao = () => S.pessoas.slice(0, 2).map((p) => p.id);
+  function divisaoDe(x) {
+    const base = Array.isArray(x.divisao) && x.divisao.length ? x.divisao : divPadrao();
+    const ids = [...new Set(base)].filter((id) => pessoa(id));
+    return ids.length ? ids : null;
+  }
+  function temDono(l) { return l.dono === "dividir" ? !!divisaoDe(l) : !!pessoa(l.dono); }
+  const donoValido = (d, x) => (d === "dividir" ? !!divisaoDe(x || {}) : !!pessoa(d));
+  function rotuloDono(x) {
+    if (x.dono === "dividir") { const ids = divisaoDe(x) || []; return "Dividir: " + ids.map(nome).join(", "); }
+    return nome(x.dono);
+  }
+
+  // ---------- CSV ----------
+  function valorBR(s) {
+    let t = String(s || "").replace(/\s/g, "");
+    if (!t) return null;
+    const neg = t.startsWith("-");
+    t = t.replace(/^[-+]/, "").replace(/^R\$/i, "");
+    if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, "").replace(",", ".");
+    const v = parseFloat(t);
+    return Number.isFinite(v) ? (neg ? -v : v) : null;
+  }
+  function parseCSV(text) {
+    const rows = []; let row = [], f = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+      else if (c === '"') q = true;
+      else if (c === ",") { row.push(f); f = ""; }
+      else if (c === "\n") { row.push(f); rows.push(row); row = []; f = ""; }
+      else if (c !== "\r") f += c;
+    }
+    if (f !== "" || row.length) { row.push(f); rows.push(row); }
+    return rows.filter((r) => r.some((x) => x.trim() !== ""));
+  }
+  function linhasDoCSV(text) {
+    const rows = parseCSV(String(text).replace(/^﻿/, ""));
+    if (rows.length < 2) throw new Error("O arquivo está vazio.");
+    const hd = rows[0].map(norm);
+    const iD = hd.findIndex((x) => x === "date" || x === "data");
+    const iT = hd.findIndex((x) => ["title", "descricao", "titulo", "description"].includes(x));
+    const iA = hd.findIndex((x) => ["amount", "valor"].includes(x));
+    if (iD < 0 || iT < 0 || iA < 0) throw new Error("Esse arquivo não parece o CSV da fatura do cartão Nubank (colunas date, title e amount).");
+    const out = [];
+    for (const r of rows.slice(1)) {
+      const desc = (r[iT] || "").trim();
+      const v = valorBR(r[iA]);
+      let d = (r[iD] || "").trim();
+      const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (m) d = `${m[3]}-${m[2]}-${m[1]}`;
+      if (!desc || v === null || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      const pag = norm(desc).includes("pagamento recebido");
+      out.push({ i: out.length, data: d, desc, valor: r2(v), tipo: pag ? "pagamento" : "compra", dono: null, via: null });
+    }
+    if (!out.length) throw new Error("Não achei nenhuma compra válida no arquivo.");
+    return out;
+  }
+
+  // ---------- classificação ----------
+  function regraPara(desc) {
+    const d = norm(desc); let best = null;
+    for (const r of S.regras.values()) {
+      if (!r.padrao || !d.includes(r.padrao) || !donoValido(r.dono, r)) continue;
+      if (!best || r.padrao.length > best.padrao.length) best = r;
+    }
+    return best;
+  }
+  function continuacao(desc, valor, fidAtual) {
+    const p = parcela(desc); if (!p) return null; let best = null;
+    for (const [fid, f] of S.faturas) {
+      if (fid === fidAtual) continue;
+      for (const l of f.linhas || []) {
+        if (l.tipo !== "compra" || !temDono(l)) continue;
+        const q = parcela(l.desc);
+        if (!q || q.base !== p.base || q.tot !== p.tot || q.n >= p.n) continue;
+        if (Math.abs(Math.abs(l.valor) - Math.abs(valor)) > 0.05) continue;
+        if (!best || q.n > best.n) best = { n: q.n, dono: l.dono, divisao: l.divisao };
+      }
+    }
+    return best;
+  }
+  function aplicarDono(l, dono, via, divisao) {
+    l.dono = dono; l.via = dono ? via : null;
+    if (dono === "dividir") l.divisao = (Array.isArray(divisao) && divisao.length ? divisao : divPadrao()).slice();
+    else delete l.divisao;
+  }
+  function autoClassificar(linhas, fid) {
+    let n = 0;
+    for (const l of linhas) {
+      if (l.tipo !== "compra" || temDono(l)) continue;
+      const c = continuacao(l.desc, l.valor, fid);
+      if (c) { aplicarDono(l, c.dono, "parcela", c.divisao); n++; continue; }
+      const r = regraPara(l.desc);
+      if (r) { aplicarDono(l, r.dono, "regra", r.divisao); n++; }
+    }
+    return n;
+  }
+  function totais(f) {
+    const parte = {}, pagos = {};
+    for (const p of S.pessoas) { parte[p.id] = 0; pagos[p.id] = 0; }
+    let tot = 0, sem = 0, nSem = 0;
+    for (const l of f.linhas || []) {
+      if (l.tipo === "pagamento") {
+        const q = l.pagoPor || (l.pagoPorEle ? "ele" : null);
+        if (q && q in pagos) pagos[q] += Math.abs(l.valor);
+        continue;
+      }
+      tot += l.valor;
+      if (l.dono === "dividir") {
+        const ids = divisaoDe(l);
+        if (ids) { for (const id of ids) parte[id] += l.valor / ids.length; continue; }
+      } else if (l.dono && l.dono in parte) { parte[l.dono] += l.valor; continue; }
+      sem += l.valor; nSem++;
+    }
+    for (const k in parte) parte[k] = r2(parte[k]);
+    for (const k in pagos) pagos[k] = r2(pagos[k]);
+    return { tot: r2(tot), sem: r2(sem), nSem, parte, pagos };
+  }
+
+  // ---------- gravação ----------
+  const salvando = new Map();
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  function ocupado(fid) { const st = salvando.get(fid); return !!(st && (st.sujo || st.voando)); }
+  function salvarFatura(fid) {
+    if (!S.db || S.readOnly) return;
+    const st = salvando.get(fid) || {}; salvando.set(fid, st);
+    st.sujo = true; clearTimeout(st.timer);
+    st.timer = setTimeout(() => descarregar(fid), 700);
+  }
+  async function descarregar(fid) {
+    const st = salvando.get(fid); if (!st) return;
+    if (st.voando) { st.denovo = true; return; }
+    const f = S.faturas.get(fid); if (!f) return;
+    st.voando = true; st.sujo = false;
+    try { await S.db.doc("faturas/" + fid).set(clone(f)); S.erroEscrita = ""; }
+    catch (e) { erroEscrita(e); }
+    finally {
+      st.voando = false;
+      if (st.denovo || st.sujo) { st.denovo = false; descarregar(fid); }
+      render();
+    }
+  }
+  let fila = Promise.resolve();
+  function enfileirar(fn) { fila = fila.then(fn).catch(erroEscrita); }
+  function salvarRegra(padrao, dono, divisao) {
+    if (!S.db || S.readOnly) return;
+    padrao = norm(padrao); if (padrao.length < 3) return;
+    const id = slug(padrao); const ex = S.regras.get(id);
+    const data = { padrao, dono, criadoEm: new Date().toISOString() };
+    if (dono === "dividir") data.divisao = (divisao && divisao.length ? divisao : divPadrao()).slice();
+    if (ex && ex.dono === dono && ex.padrao === padrao && JSON.stringify(ex.divisao || null) === JSON.stringify(data.divisao || null)) return;
+    S.regras.set(id, { id, ...data });
+    enfileirar(() => S.db.doc("regras/" + id).set(data));
+  }
+  function apagarRegra(id) {
+    S.regras.delete(id); render();
+    if (S.db && !S.readOnly) enfileirar(() => S.db.doc("regras/" + id).delete());
+  }
+  let timerPessoas = null;
+  function salvarPessoas() {
+    if (!S.db || S.readOnly) return;
+    clearTimeout(timerPessoas);
+    timerPessoas = setTimeout(() => {
+      const data = { lista: S.pessoas.map((p) => ({ id: p.id, nome: p.nome })), dona: S.dona };
+      enfileirar(() => S.db.doc("config/pessoas").set(data));
+    }, 500);
+  }
+  function erroEscrita(e) {
+    const code = e && e.code;
+    if (code === "invalid_argument" || code === "revoked" || code === "not_granted") {
+      S.readOnly = true;
+      S.erroEscrita = "Seu acesso a este app é só de visualização, então nada é salvo. Peça para quem criou o app te convidar por e-mail com permissão de edição (“Pode editar”).";
+    } else if (code === "quota_exceeded") {
+      S.erroEscrita = "O espaço do navegador acabou. Baixe um backup e apague faturas antigas para continuar salvando.";
+    } else {
+      S.erroEscrita = "Não consegui salvar agora. Confira a conexão; o app tenta de novo na próxima mudança.";
+    }
+    render();
+  }
+
+  // ---------- ações ----------
+  function definir(fid, i, dono, via, divisao) {
+    if (S.readOnly) return;
+    const f = S.faturas.get(fid); if (!f) return;
+    const l = f.linhas.find((x) => x.i === i); if (!l) return;
+    aplicarDono(l, dono, via || "manual", divisao);
+    S.sug.delete(fid + ":" + i);
+    if (dono && S.lembrar && l.tipo === "compra" && l.valor > 0 && !parcela(l.desc)) {
+      const k = chave(l.desc);
+      salvarRegra(k, dono, l.divisao);
+      for (const o of f.linhas) {
+        if (o !== l && o.tipo === "compra" && !temDono(o) && o.valor > 0 && !parcela(o.desc) && norm(o.desc).includes(k)) {
+          aplicarDono(o, dono, "regra", l.divisao); S.sug.delete(fid + ":" + o.i);
+        }
+      }
+    }
+    f.atualizadoEm = new Date().toISOString();
+    salvarFatura(fid); render();
+  }
+  function aceitarTodas() {
+    const fid = S.atual; const f = S.faturas.get(fid); if (!f) return;
+    for (const l of f.linhas) {
+      const s = S.sug.get(fid + ":" + l.i);
+      if (s && !temDono(l)) definir(fid, l.i, s.dono, "ia");
+    }
+  }
+  function definirPagador(fid, i, quem) {
+    if (S.readOnly) return;
+    const f = S.faturas.get(fid); const l = f && f.linhas.find((x) => x.i === i); if (!l) return;
+    if (quem && pessoa(quem)) l.pagoPor = quem; else delete l.pagoPor;
+    delete l.pagoPorEle;
+    f.atualizadoEm = new Date().toISOString();
+    salvarFatura(fid); render();
+  }
+  function adicionarPessoa(nm) {
+    nm = String(nm || "").trim().slice(0, 30);
+    if (!nm || S.readOnly) return;
+    if (S.pessoas.length >= MAX_PESSOAS) return;
+    let id = "p-" + slug(nm).slice(0, 20);
+    while (pessoa(id)) id += "-" + Math.random().toString(36).slice(2, 5);
+    S.pessoas.push({ id, nome: nm });
+    salvarPessoas(); render();
+  }
+  function renomearPessoa(id, nm) {
+    const p = pessoa(id); nm = String(nm || "").trim().slice(0, 30);
+    if (!p || !nm || p.nome === nm) return;
+    p.nome = nm; salvarPessoas(); render();
+  }
+  function contarUso(id) {
+    let proprias = 0, divididas = 0, regras = 0;
+    for (const f of S.faturas.values()) for (const l of f.linhas || []) {
+      if (l.dono === id) proprias++;
+      else if (l.dono === "dividir" && Array.isArray(l.divisao) && l.divisao.includes(id)) divididas++;
+    }
+    for (const r of S.regras.values()) if (r.dono === id || (r.dono === "dividir" && (r.divisao || []).includes(id))) regras++;
+    return { proprias, divididas, regras };
+  }
+  function removerPessoa(id) {
+    if (id === S.dona || S.pessoas.length <= 2) return;
+    S.pessoas = S.pessoas.filter((p) => p.id !== id);
+    S.removendo = null; salvarPessoas(); render();
+  }
+  function resumoPessoa(fid, pid) {
+    const f = S.faturas.get(fid); const t = totais(f); const linhas = [];
+    for (const l of [...f.linhas].sort(porData)) {
+      if (l.tipo !== "compra") continue;
+      if (l.dono === pid) linhas.push(`${diaMes(l.data)}  ${l.desc}  ${fmt(l.valor)}`);
+      else if (l.dono === "dividir") { const ids = divisaoDe(l); if (ids && ids.includes(pid)) linhas.push(`${diaMes(l.data)}  ${l.desc}  ${fmt(l.valor / ids.length)} (dividido por ${ids.length})`); }
+    }
+    let txt = `${f.rotulo || fid} · parte de ${nome(pid)}: ${fmt(t.parte[pid])}\n\n${linhas.join("\n") || "Nenhuma compra."}`;
+    if (pid !== S.dona) txt += `\n\nJá pago: ${fmt(t.pagos[pid])}\nFalta devolver: ${fmt(r2(t.parte[pid] - t.pagos[pid]))}`;
+    return txt;
+  }
+  async function copiarResumo(pid) {
+    const txt = resumoPessoa(S.atual, pid);
+    try { await navigator.clipboard.writeText(txt); S.copiado = pid; S.textoCopia = null; render(); setTimeout(() => { if (S.copiado === pid) { S.copiado = null; render(); } }, 2500); }
+    catch (_) { S.textoCopia = { pid, txt }; render(); }
+  }
+
+  async function lerArquivo(file) {
+    S.uploadErro = ""; S.uploadTitulo = ""; S.upload = null;
+    try {
+      const text = await file.text();
+      const linhas = linhasDoCSV(text);
+      const m = String(file.name || "").match(/(\d{4}-\d{2}-\d{2})/);
+      let fid, rotulo, venc = null;
+      if (m) { fid = m[1]; venc = m[1]; rotulo = "Vencimento " + dataBR(m[1]); }
+      else { const max = linhas.map((l) => l.data).sort().pop(); fid = max; rotulo = "Compras até " + dataBR(max); }
+      const ex = S.faturas.get(fid);
+      if (ex) {
+        const mapa = new Map();
+        for (const l of ex.linhas || []) { const k = l.data + "|" + l.desc + "|" + l.valor; if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(l); }
+        for (const l of linhas) {
+          const arr = mapa.get(l.data + "|" + l.desc + "|" + l.valor);
+          if (arr && arr.length) {
+            const o = arr.shift();
+            if (o.dono) aplicarDono(l, o.dono, o.via || "manual", o.divisao);
+            const q = o.pagoPor || (o.pagoPorEle ? "ele" : null); if (q) l.pagoPor = q;
+          }
+        }
+      }
+      const auto = autoClassificar(linhas, fid);
+      const compras = linhas.filter((l) => l.tipo === "compra").length;
+      S.upload = { fid, rotulo, venc, linhas, auto, compras, pagamentos: linhas.length - compras, existe: !!ex, nomeArq: file.name };
+    } catch (e) {
+      S.uploadErro = (e && e.message) || "Não consegui ler esse arquivo.";
+    }
+    render();
+  }
+  async function confirmarUpload() {
+    const u = S.upload; if (!u || S.salvandoUpload) return;
+    const ant = S.faturas.get(u.fid);
+    const f = { rotulo: u.rotulo, vencimento: u.venc, criadoEm: (ant && ant.criadoEm) || new Date().toISOString(), atualizadoEm: new Date().toISOString(), linhas: u.linhas };
+    if (S.podeEscrever !== true) {
+      S.salvandoUpload = true; render();
+      try { await S.db.doc("faturas/" + u.fid).set(clone(f)); S.podeEscrever = true; }
+      catch (e) {
+        S.salvandoUpload = false; S.upload = null; erroEscrita(e); S.uploadTitulo = "A fatura não foi salva";
+        S.uploadErro = S.readOnly ? "Seu acesso a este app é só de visualização, então a fatura não foi salva. Peça para quem criou o app te convidar por e-mail com permissão de edição (“Pode editar”)." : "Não consegui salvar a fatura agora. Tente de novo.";
+        render(); return;
+      }
+      S.salvandoUpload = false;
+      S.faturas.set(u.fid, f); S.atual = u.fid; S.upload = null; render(); return;
+    }
+    S.faturas.set(u.fid, f); S.atual = u.fid; S.upload = null;
+    salvarFatura(u.fid); render();
+  }
+
+  // ---------- IA ----------
+  function msgIA(code) {
+    switch (code) {
+      case "not_granted": case "sampling_disabled": case "not_declared": case "capability_disabled": case "capability_removed":
+        return "A IA não está disponível neste acesso. Dá para separar tocando nos botões.";
+      case "rate_limited": return "Muitos pedidos agora. Tente de novo daqui a pouco.";
+      case "session_expired": return "Sua sessão expirou. Entre de novo no claude.ai.";
+      case "invalid_json": return "A resposta veio num formato estranho. Tente de novo.";
+      case "cancelled": return "";
+      default: return "A IA não respondeu agora. Tente de novo.";
+    }
+  }
+  async function sugerir() {
+    const fid = S.atual; const f = S.faturas.get(fid); if (!f || !S.sample || S.aiBusy) return;
+    const pend = f.linhas.filter((l) => l.tipo === "compra" && !temDono(l));
+    if (!pend.length) return;
+    S.aiBusy = true; S.aiMsg = "Pensando…"; render();
+    const hist = [];
+    for (const ff of S.faturas.values()) for (const l of ff.linhas || []) if (l.tipo === "compra" && temDono(l)) hist.push(chave(l.desc) + " → " + (l.dono === "dividir" ? "dividir" : l.dono));
+    const histU = [...new Set(hist)].slice(0, 160);
+    const regras = [...S.regras.values()].filter((r) => donoValido(r.dono, r)).map((r) => r.padrao + " → " + r.dono);
+    const ids = S.pessoas.map((p) => p.id);
+    const prompt = `Você ajuda a dividir a fatura de um cartão de crédito usado por várias pessoas.
+Pessoas (id → nome): ${S.pessoas.map((p) => `${p.id} → ${p.nome}${p.id === S.dona ? " (dona do cartão)" : ""}`).join("; ")}.
+Para cada compra SEM DONO abaixo, sugira de quem provavelmente é, usando um dos ids acima, ou "dividir" (dividida entre ${divPadrao().map(nome).join(" e ")}). Use só as regras e o histórico como pista. Sem pista razoável, use "?". Não invente certeza.
+
+Regras salvas (trecho da descrição → dono):
+${regras.join("\n") || "(nenhuma)"}
+
+Compras já separadas antes (descrição → dono):
+${histU.join("\n") || "(nenhuma)"}
+
+Compras sem dono (i | descrição | valor em R$):
+${pend.map((l) => l.i + " | " + l.desc + " | " + l.valor.toFixed(2)).join("\n")}
+
+Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "dono": "${ids[1] || "ela"}", "motivo": "farmácia já era dela"}]. "dono" é um destes: ${[...ids, "dividir", "?"].map((x) => `"${x}"`).join(", ")}. "motivo" em português, no máximo 8 palavras.`;
+    try {
+      const arr = await S.sample.json(prompt, { modelTier: "quick" });
+      let n = 0;
+      if (Array.isArray(arr)) for (const s of arr) {
+        const i = Number(s && s.i); const d = String((s && s.dono) || "");
+        if (!Number.isFinite(i) || !(d === "dividir" || pessoa(d))) continue;
+        if (!pend.some((l) => l.i === i)) continue;
+        S.sug.set(fid + ":" + i, { dono: d, motivo: String((s && s.motivo) || "").slice(0, 80) }); n++;
+      }
+      S.aiMsg = n ? `${n} sugest${n > 1 ? "ões" : "ão"}. Confira antes de aceitar.` : "A IA não achou pistas suficientes. Separe tocando nos botões.";
+    } catch (e) {
+      S.aiMsg = msgIA(e && e.code);
+      if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(e && e.code)) S.sample = null;
+    } finally { S.aiBusy = false; render(); }
+  }
+
+  // ---------- desenho ----------
+  const porData = (a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : a.i - b.i);
+  function botoesDono(fid, l) {
+    const key = fid + ":" + l.i;
+    const wrap = h("div", { class: "ln-acts", role: "group", "aria-label": "De quem é" });
+    for (const p of S.pessoas) {
+      wrap.append(h("button", { type: "button", class: "pbtn", style: `${estilo(p.id)}`, "data-act": "dono", "data-fid": fid, "data-i": l.i, "data-dono": p.id,
+        "aria-pressed": l.dono === p.id ? "true" : "false", disabled: S.readOnly, text: p.nome }));
+    }
+    wrap.append(h("button", { type: "button", class: "pbtn div", "data-act": "abrir-div", "data-fid": fid, "data-i": l.i,
+      "aria-pressed": l.dono === "dividir" && divisaoDe(l) ? "true" : "false", "aria-expanded": S.abrirDiv === key ? "true" : "false", disabled: S.readOnly, text: "÷ Dividir" }));
+    return wrap;
+  }
+  function seletorDivisao(fid, l) {
+    const marcados = new Set(l.dono === "dividir" ? divisaoDe(l) || divPadrao() : divPadrao());
+    return h("div", { class: "divpick" },
+      h("span", { class: "small", text: "Dividir igualmente entre:" }),
+      h("div", { class: "opts" }, S.pessoas.map((p) => h("label", { class: "toggle" },
+        h("input", { type: "checkbox", class: "chk-div", value: p.id, checked: marcados.has(p.id) }), p.nome))),
+      h("div", { class: "controls" },
+        h("button", { type: "button", class: "btn small-btn primary", "data-act": "confirmar-div", "data-fid": fid, "data-i": l.i, text: "Dividir" }),
+        h("button", { type: "button", class: "btn small-btn", "data-act": "fechar-div", text: "Cancelar" })));
+  }
+  function itemLinha(fid, l, comSug) {
+    const key = fid + ":" + l.i;
+    let meta = diaMes(l.data);
+    if (l.dono === "dividir" && divisaoDe(l)) meta += " · " + rotuloDono(l);
+    if (l.via === "regra") meta += " · pela regra"; else if (l.via === "parcela") meta += " · parcela seguinte"; else if (l.via === "ia") meta += " · sugestão aceita";
+    const li = h("li", { class: "linha" },
+      h("div", { class: "ln-info" }, h("span", { class: "ln-desc", text: l.desc }), h("span", { class: "ln-meta", text: meta })),
+      h("span", { class: "ln-val", text: fmt(l.valor) }),
+      botoesDono(fid, l));
+    if (S.abrirDiv === key && !S.readOnly) li.append(seletorDivisao(fid, l));
+    const s = comSug && S.sug.get(key);
+    if (s) li.append(h("div", { class: "sug" }, h("span", null, "IA: ", h("b", { text: rotuloDono(s) }), s.motivo ? " · " + s.motivo : ""),
+      h("button", { type: "button", class: "btn small-btn", "data-act": "aceitar", "data-fid": fid, "data-i": l.i, "data-dono": s.dono, disabled: S.readOnly, text: "Aceitar" })));
+    return li;
+  }
+
+  function render() {
+    const sel = $("#sel-fatura");
+    const ids = [...S.faturas.keys()].sort().reverse();
+    if (S.atual && !S.faturas.has(S.atual)) S.atual = null;
+    if (!S.atual && ids.length) S.atual = ids[0];
+    fill(sel, ...ids.map((id) => {
+      const t = totais(S.faturas.get(id));
+      return h("option", { value: id, selected: id === S.atual, text: (S.faturas.get(id).rotulo || id) + (t.nSem ? ` · ${t.nSem} sem dono` : " · tudo separado") });
+    }));
+    sel.disabled = !ids.length;
+    $("#lbl-upload").classList.toggle("hidden", S.readOnly || !S.db);
+
+    const av = $("#aviso"); const msgs = [];
+    if (S.semDb) msgs.push("Este navegador não deixou o app guardar dados. Se estiver numa aba anônima, abra numa aba normal.");
+    else if (S.readOnly) msgs.push(S.erroEscrita || "Seu acesso a este app é só de visualização: você não vê as faturas lançadas nem consegue mudar nada. Peça para quem criou o app te convidar por e-mail com permissão de edição (“Pode editar”).");
+    else if (S.erroEscrita) msgs.push(S.erroEscrita);
+    if (S.lento && !(S.carregou.faturas && S.carregou.regras)) msgs.push("Os dados estão demorando para carregar. O que aparece pode estar desatualizado.");
+    fill(av, ...msgs.map((m) => h("p", { text: m })));
+    av.classList.toggle("hidden", !msgs.length);
+    av.classList.toggle("bad", S.semDb || S.readOnly);
+
+    const up = $("#upload");
+    if (S.restaurar) {
+      const r = S.restaurar;
+      up.classList.remove("hidden");
+      fill(up, h("h2", { text: "Restaurar backup" }),
+        h("p", { text: `“${r.nomeArq}”${r.quando ? ", feito em " + dataBR(r.quando.slice(0, 10)) : ""}: ${r.faturas} fatura${r.faturas === 1 ? "" : "s"}, ${r.regras} regra${r.regras === 1 ? "" : "s"} e ${r.pessoas} pessoa${r.pessoas === 1 ? "" : "s"}.` }),
+        S.faturas.size ? h("p", { class: "muted small", text: "Isso substitui o que está salvo neste celular agora." }) : null,
+        h("div", { class: "controls" },
+          h("button", { type: "button", class: "btn primary", "data-act": "confirmar-restaurar", text: "Restaurar" }),
+          h("button", { type: "button", class: "btn", "data-act": "fechar-upload", text: "Cancelar" })));
+    } else if (S.upload || S.uploadErro) {
+      up.classList.remove("hidden");
+      if (S.uploadErro) fill(up, h("h2", { text: S.uploadTitulo || "Não deu para ler o arquivo" }), h("p", { text: S.uploadErro }),
+        h("div", { class: "controls" }, h("button", { type: "button", class: "btn", "data-act": "fechar-upload", text: "Fechar" })));
+      else {
+        const u = S.upload; const jaSep = u.linhas.filter((l) => l.tipo === "compra" && temDono(l)).length; const semDono = u.compras - jaSep;
+        fill(up, 
+          h("h2", { text: u.rotulo }),
+          h("p", { text: `${u.compras} compras e ${u.pagamentos} pagamentos em “${u.nomeArq}”. ${jaSep} já estão separadas${u.auto ? ` (${u.auto} agora, pelo que o app aprendeu)` : ""}; ${semDono} ficam para vocês decidirem.` }),
+          u.existe ? h("p", { class: "muted small", text: "Essa fatura já estava aqui. Salvar atualiza as linhas e mantém o que já tinha sido separado." }) : null,
+          h("div", { class: "controls" },
+            h("button", { type: "button", class: "btn primary", "data-act": "confirmar-upload", disabled: S.salvandoUpload, text: S.salvandoUpload ? "Salvando…" : "Salvar fatura" }),
+            h("button", { type: "button", class: "btn", "data-act": "fechar-upload", text: "Cancelar" })));
+      }
+    } else up.classList.add("hidden");
+
+    const cp = $("#copia");
+    if (S.textoCopia) {
+      cp.classList.remove("hidden");
+      fill(cp, h("h2", { text: `Resumo de ${nome(S.textoCopia.pid)}` }),
+        h("p", { class: "muted small", text: "Não consegui copiar sozinho. Selecione o texto abaixo e copie." }),
+        h("textarea", { id: "txt-copia", readonly: true, "aria-label": "Resumo para copiar" }, S.textoCopia.txt),
+        h("div", { class: "controls" }, h("button", { type: "button", class: "btn", "data-act": "fechar-copia", text: "Fechar" })));
+    } else cp.classList.add("hidden");
+
+    const f = S.atual ? S.faturas.get(S.atual) : null;
+    const carregado = S.carregou.faturas || S.semDb;
+    $("#vazio").classList.toggle("hidden", !!f || !carregado || S.semDb || S.readOnly);
+    $("#vazio-dica").classList.toggle("hidden", S.souDono !== false);
+    const naGraf = S.view === "graficos";
+    $("#abas").classList.toggle("hidden", !f);
+    for (const b of document.querySelectorAll("#abas .tab")) b.setAttribute("aria-pressed", String(b.dataset.aba === S.view));
+    $("#resumo").classList.toggle("hidden", !f);
+    for (const id of ["#semdono", "#separadas", "#pagamentos"]) $(id).classList.toggle("hidden", !f || naGraf);
+    $("#graficos").classList.toggle("hidden", !f || !naGraf);
+    esconderTip();
+    if (!f) { desenharAjustes(); return; }
+    const fid = S.atual; const t = totais(f);
+    if (naGraf) renderGraficos(f, t);
+
+    // resumo
+    const tiles = S.pessoas.map((p) => {
+      const parte = t.parte[p.id] || 0, pago = t.pagos[p.id] || 0;
+      let sub;
+      if (p.id === S.dona) sub = "Dona do cartão";
+      else if (!parte && !pago) sub = "Nada nesta fatura";
+      else sub = pago > 0 ? `Pagou ${fmt(pago)} · falta ${fmt(r2(parte - pago))}` : `Falta devolver ${fmt(parte)}`;
+      return h("div", { class: "tile", style: `${estilo(p.id)}` },
+        h("span", { class: "lbl", text: `Parte de ${p.nome}` }), h("span", { class: "val", text: fmt(parte) }), h("span", { class: "sub", text: sub }),
+        h("button", { type: "button", class: "btn small-btn", "data-act": "copiar", "data-pid": p.id, text: S.copiado === p.id ? "Copiado!" : "Copiar resumo" }));
+    });
+    tiles.push(h("div", { class: "tile sem" + (t.nSem ? "" : " zero") }, h("span", { class: "lbl", text: "Sem dono" }), h("span", { class: "val", text: fmt(t.sem) }),
+      h("span", { class: "sub", text: t.nSem ? `${t.nSem} compra${t.nSem > 1 ? "s" : ""} para decidir` : "Tudo separado" })));
+    const pct = (x) => (t.tot > 0 ? Math.max(0, Math.min(100, (x / t.tot) * 100)) : 0);
+    fill($("#resumo"), 
+      h("div", { class: "tiles" }, tiles),
+      h("div", { class: "card" },
+        h("div", { class: "row-between" }, h("span", { class: "muted small", text: `Total das compras: ${fmt(t.tot)}` }),
+          h("span", { class: "small controls" }, S.pessoas.map((p) => h("span", { class: "chip", style: `${estilo(p.id)}`, text: p.nome })))),
+        h("div", { class: "bar", role: "img", "aria-label": "Divisão: " + S.pessoas.map((p) => `${p.nome} ${fmt(t.parte[p.id])}`).join(", ") + `, sem dono ${fmt(t.sem)}` },
+          S.pessoas.map((p) => h("span", { style: `${estilo(p.id)};width:${pct(t.parte[p.id])}%` })),
+          t.sem > 0 ? h("span", { style: `--pc:var(--sem);width:${pct(t.sem)}%` }) : null)));
+
+    // sem dono
+    const pend = f.linhas.filter((l) => l.tipo === "compra" && !temDono(l)).sort(porData);
+    const temSug = pend.some((l) => S.sug.has(fid + ":" + l.i));
+    fill($("#semdono"), 
+      h("div", { class: "row-between" }, h("h2", { text: pend.length ? `Sem dono (${pend.length})` : "Sem dono" }),
+        pend.length && !S.readOnly ? h("div", { class: "controls" },
+          S.sample ? h("button", { type: "button", class: "btn", "data-act": "sugerir", disabled: S.aiBusy, text: S.aiBusy ? "Pensando…" : "Sugerir com IA" }) : null,
+          temSug ? h("button", { type: "button", class: "btn", "data-act": "aceitar-todas", text: "Aceitar sugestões" }) : null) : null),
+      pend.length ? h("label", { class: "toggle" }, h("input", { type: "checkbox", id: "chk-lembrar", checked: S.lembrar, disabled: S.readOnly }),
+        "Lembrar minhas escolhas nas próximas faturas") : null,
+      S.aiMsg ? h("p", { class: "muted small", text: S.aiMsg }) : null,
+      pend.length ? h("ul", { class: "linhas" }, pend.map((l) => itemLinha(fid, l, true)))
+        : h("p", { class: "muted", text: "Tudo separado nesta fatura." }));
+
+    // separadas
+    const grupos = [...S.pessoas.map((p) => ({ id: p.id, rot: p.nome, ls: f.linhas.filter((l) => l.tipo === "compra" && l.dono === p.id) })),
+      { id: "dividir", rot: "Divididas", ls: f.linhas.filter((l) => l.tipo === "compra" && l.dono === "dividir" && divisaoDe(l)) }];
+    fill($("#separadas"), h("h2", { text: "Já separadas" }), ...grupos.map((g) => {
+      const ls = g.ls.sort(porData); const soma = r2(ls.reduce((a, l) => a + l.valor, 0));
+      return h("details", null, h("summary", null, h("span", { class: "s-left" }, h("span", { class: "chip", style: `${estilo(g.id)}`, text: g.rot }), ` ${ls.length} compra${ls.length === 1 ? "" : "s"}`),
+        h("span", { class: "num", text: fmt(soma) })), ls.length ? h("ul", { class: "linhas" }, ls.map((l) => itemLinha(fid, l, false))) : h("p", { class: "muted small", text: "Nada aqui." }));
+    }));
+
+    // pagamentos
+    const pags = f.linhas.filter((l) => l.tipo === "pagamento").sort(porData);
+    fill($("#pagamentos"), 
+      h("details", null, h("summary", null, h("span", { class: "s-left", text: `Pagamentos na fatura (${pags.length})` }), h("span", { class: "num", text: fmt(-pags.reduce((a, l) => a + l.valor, 0)) })),
+        h("p", { class: "muted small", text: "Diga quem fez cada pagamento: ele abate da parte dessa pessoa. Pagamentos do começo do período costumam ser da fatura anterior." }),
+        pags.length ? h("ul", { class: "linhas" }, pags.map((l) => {
+          const q = l.pagoPor || (l.pagoPorEle ? "ele" : "");
+          const idSel = `pag-${fid}-${l.i}`;
+          return h("li", { class: "linha" },
+            h("div", { class: "ln-info" }, h("span", { class: "ln-desc", text: fmt(Math.abs(l.valor)) }), h("label", { class: "ln-meta", for: idSel, text: diaMes(l.data) + " · quem pagou?" })),
+            h("select", { id: idSel, class: "sel-pagador", "data-fid": fid, "data-i": l.i, disabled: S.readOnly },
+              h("option", { value: "", selected: !q, text: "Não marcado" }),
+              S.pessoas.map((p) => h("option", { value: p.id, selected: q === p.id, text: p.nome }))));
+        })) : h("p", { class: "muted small", text: "Nenhum pagamento nesta fatura." })));
+
+    desenharAjustes();
+  }
+
+  function desenharAjustes() {
+    const aj = $("#ajustes");
+    const mostrar = !!S.db && !S.readOnly && S.view !== "graficos" && (S.carregou.regras || S.faturas.size > 0);
+    aj.classList.toggle("hidden", !mostrar);
+    if (!mostrar) return;
+    const regras = [...S.regras.values()].sort((a, b) => a.padrao.localeCompare(b.padrao));
+    const rem = S.removendo ? pessoa(S.removendo) : null;
+    const uso = rem ? contarUso(rem.id) : null;
+    fill(aj, 
+      h("details", { open: S.removendo ? true : null }, h("summary", null, h("span", { class: "s-left", text: `Pessoas (${S.pessoas.length})` })),
+        h("p", { class: "muted small", text: "Todo mundo que usa o cartão. Escolha quem é a dona: ela não aparece com valor a devolver." }),
+        h("ul", { class: "lista-simples" }, S.pessoas.map((p) => h("li", null,
+          h("div", { class: "pessoa-row" },
+            h("span", { class: "dot", style: `${estilo(p.id)}` }),
+            h("input", { type: "text", class: "inp-nome", "data-pid": p.id, value: p.nome, maxlength: 30, "aria-label": "Nome de " + p.nome }),
+            h("label", { class: "toggle small" }, h("input", { type: "radio", name: "dona", class: "rad-dona", value: p.id, checked: S.dona === p.id }), "dona do cartão")),
+          h("button", { type: "button", class: "btn small-btn", "data-act": "pedir-remover", "data-pid": p.id, disabled: p.id === S.dona || S.pessoas.length <= 2, text: "Remover" })))),
+        rem ? h("div", { class: "card notice" },
+          h("p", { text: `Remover ${rem.nome}? ${uso.proprias} compra${uso.proprias === 1 ? "" : "s"} só dessa pessoa ${uso.proprias === 1 ? "fica" : "ficam"} sem dono` +
+            (uso.divididas ? `, e ${uso.divididas} compra${uso.divididas === 1 ? " dividida passa" : "s divididas passam"} a ser dividida${uso.divididas === 1 ? "" : "s"} só entre os outros` : "") +
+            (uso.regras ? `. ${uso.regras} regra${uso.regras === 1 ? "" : "s"} com essa pessoa ${uso.regras === 1 ? "deixa" : "deixam"} de valer.` : ".") }),
+          h("div", { class: "controls" },
+            h("button", { type: "button", class: "btn primary", "data-act": "confirmar-remover", "data-pid": rem.id, text: "Remover" }),
+            h("button", { type: "button", class: "btn", "data-act": "cancelar-remover", text: "Cancelar" }))) : null,
+        S.pessoas.length < MAX_PESSOAS ? h("form", { class: "form-row", id: "form-pessoa" },
+          h("input", { type: "text", id: "inp-nova-pessoa", placeholder: "Nome, ex.: Vanesca", maxlength: 30, "aria-label": "Nome da nova pessoa" }),
+          h("button", { type: "submit", class: "btn", text: "Adicionar pessoa" })) : h("p", { class: "muted small", text: `Máximo de ${MAX_PESSOAS} pessoas.` })),
+      h("details", null, h("summary", null, h("span", { class: "s-left", text: "Backup" }), h("span", { class: "muted small", text: ultimoBackup() ? "último: " + dataBR(ultimoBackup().slice(0, 10)) : "nenhum ainda" })),
+        h("p", { class: "muted small", text: "Os dados ficam só neste celular. Um backup é um arquivo com tudo: pessoas, regras e faturas. Guarde ou mande pra você no WhatsApp; pra abrir em outro celular, é só restaurar lá." }),
+        h("div", { class: "controls" },
+          podeEnviar() ? h("button", { type: "button", class: "btn", "data-act": "backup-enviar", text: "Enviar backup" }) : null,
+          h("button", { type: "button", class: "btn", "data-act": "backup-baixar", text: "Baixar backup" }),
+          h("label", { class: "btn", for: "inp-backup", text: "Restaurar backup" }))),
+      h("details", null, h("summary", null, h("span", { class: "s-left", text: `O que o app já sabe (${regras.length} regras)` })),
+        h("p", { class: "muted small", text: "Quando a descrição de uma compra contém o trecho, o app separa sozinho. Parcelas seguintes de uma compra já separada também." }),
+        regras.length ? h("ul", { class: "lista-simples regras" }, regras.map((r) => h("li", null,
+          h("span", null, h("code", { text: r.padrao }), " → ", h("span", { class: "chip", style: `${estilo(r.dono)}`, text: donoValido(r.dono, r) ? rotuloDono(r) : "pessoa removida" })),
+          h("button", { type: "button", class: "btn small-btn", "data-act": "apagar-regra", "data-id": r.id, "aria-label": "Apagar regra " + r.padrao, text: "Apagar" })))) : h("p", { class: "muted small", text: "Nenhuma regra ainda." }),
+        h("form", { class: "form-row", id: "form-regra" },
+          h("input", { type: "text", id: "inp-padrao", placeholder: "Trecho da descrição, ex.: redepharma", "aria-label": "Trecho da descrição" }),
+          h("select", { id: "sel-dono", "aria-label": "Dono" }, S.pessoas.map((p) => h("option", { value: p.id, text: p.nome })), h("option", { value: "dividir", text: "Dividir (" + divPadrao().map(nome).join(" e ") + ")" })),
+          h("button", { type: "submit", class: "btn", text: "Adicionar regra" }))));
+  }
+
+
+
+  // ---------- banco local (navegador) ----------
+  function criarBanco(chave) {
+    let dados;
+    try { dados = JSON.parse(localStorage.getItem(chave) || "{}") || {}; localStorage.setItem(chave + ":teste", "1"); localStorage.removeItem(chave + ":teste"); }
+    catch (_) { return null; }
+    const ouvintes = new Set();
+    const md = { fromCache: false, hasPendingWrites: false };
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const snapDoc = (path) => { const d = dados[path]; return { id: path.split("/").pop(), exists: d !== undefined, data: () => (d === undefined ? undefined : copia(d)), metadata: md }; };
+    const snapCol = (path) => {
+      const docs = Object.keys(dados).filter((k) => k.split("/").slice(0, -1).join("/") === path).sort().map(snapDoc);
+      return { docs, size: docs.length, empty: !docs.length, docChanges: () => [], metadata: md };
+    };
+    function gravar() { try { localStorage.setItem(chave, JSON.stringify(dados)); } catch (e) { throw { code: "quota_exceeded", message: String(e) }; } }
+    function avisar() { for (const o of ouvintes) setTimeout(() => o.cb(o.tipo === "c" ? snapCol(o.path) : snapDoc(o.path)), 0); }
+    window.addEventListener("storage", (e) => { if (e.key === chave) { try { dados = JSON.parse(e.newValue || "{}") || {}; } catch (_) { /* ignora */ } avisar(); } });
+    const db = {
+      doc(path) {
+        return { id: path.split("/").pop(), path,
+          get: async () => snapDoc(path),
+          set: async (d) => { const ant = dados[path]; dados[path] = copia(d); try { gravar(); } catch (e) { if (ant === undefined) delete dados[path]; else dados[path] = ant; throw e; } avisar(); },
+          delete: async () => { delete dados[path]; gravar(); avisar(); },
+          onSnapshot(cb) { const o = { tipo: "d", path, cb }; ouvintes.add(o); setTimeout(() => cb(snapDoc(path)), 0); return () => ouvintes.delete(o); } };
+      },
+      collection(path) {
+        return { path, doc: (id) => db.doc(path + "/" + id), get: async () => snapCol(path),
+          onSnapshot(cb) { const o = { tipo: "c", path, cb }; ouvintes.add(o); setTimeout(() => cb(snapCol(path)), 0); return () => ouvintes.delete(o); } };
+      },
+      exportar: () => copia(dados),
+      substituir: (novo) => { const ant = dados; dados = copia(novo); try { gravar(); } catch (e) { dados = ant; throw e; } avisar(); },
+    };
+    return db;
+  }
+
+  // ---------- backup ----------
+  const CHAVE_BKP = "fatura-a-dois:ultimoBackup";
+  function ultimoBackup() { try { return localStorage.getItem(CHAVE_BKP); } catch (_) { return null; } }
+  function arquivoBackup() {
+    const conteudo = JSON.stringify({ app: "fatura-a-dois", versao: 1, exportadoEm: new Date().toISOString(), dados: S.db.exportar() });
+    const hoje = new Date().toISOString().slice(0, 10);
+    return new File([conteudo], `fatura-a-dois-backup-${hoje}.json`, { type: "application/json" });
+  }
+  function marcarBackup() { try { localStorage.setItem(CHAVE_BKP, new Date().toISOString()); } catch (_) { /* ignora */ } }
+  function baixarBackup() {
+    const f = arquivoBackup(); const url = URL.createObjectURL(f);
+    const a = document.createElement("a"); a.href = url; a.download = f.name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000); marcarBackup(); render();
+  }
+  async function enviarBackup() {
+    const f = arquivoBackup();
+    try { await navigator.share({ files: [f], title: "Backup da Fatura a dois" }); marcarBackup(); render(); }
+    catch (e) { if (!e || e.name !== "AbortError") baixarBackup(); }
+  }
+  const podeEnviar = () => { try { return !!(navigator.canShare && navigator.canShare({ files: [new File(["{}"], "x.json", { type: "application/json" })] })); } catch (_) { return false; } };
+  async function lerBackup(file) {
+    S.uploadErro = ""; S.uploadTitulo = ""; S.upload = null; S.restaurar = null;
+    try {
+      const obj = JSON.parse(await file.text());
+      if (!obj || obj.app !== "fatura-a-dois" || !obj.dados || typeof obj.dados !== "object") throw new Error("Esse arquivo não é um backup da Fatura a dois.");
+      const ks = Object.keys(obj.dados);
+      const ok = ks.every((k) => /^(faturas|regras|config)\/[A-Za-z0-9_\-.~:@+]+$/.test(k) && obj.dados[k] && typeof obj.dados[k] === "object");
+      if (!ok) throw new Error("O backup está com um formato que o app não reconhece.");
+      S.restaurar = { dados: obj.dados, faturas: ks.filter((k) => k.startsWith("faturas/")).length, regras: ks.filter((k) => k.startsWith("regras/")).length,
+        pessoas: ((obj.dados["config/pessoas"] || {}).lista || []).length, quando: obj.exportadoEm || "", nomeArq: file.name };
+    } catch (e) {
+      S.uploadTitulo = "Não deu para restaurar"; S.uploadErro = (e && e.message && !/JSON/.test(e.message)) ? e.message : "Não consegui ler esse arquivo de backup.";
+    }
+    render();
+  }
+  function confirmarRestaurar() {
+    const r = S.restaurar; if (!r) return;
+    try { S.db.substituir(r.dados); S.restaurar = null; S.atual = null; S.temPessoas = false; S.erroEscrita = ""; }
+    catch (e) { S.restaurar = null; erroEscrita(e); }
+    render();
+  }
+
+  // ---------- gráficos ----------
+  const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  function categoria(desc) {
+    const d = norm(desc);
+    if (/anthropic|claude|google one|youtube|capcut|spotify|microsoft|netflix|disney|prime video|deezer|^tim\*|vivo|claro|uber \*one|ifood club|iof de compra internacional|apple\.com|icloud/.test(d)) return "Assinaturas e celular";
+    if (/ifd\*|ifood|anota ai|saipos|restaurante|lanchonete|pizzaria|burger|cafe/.test(d)) return "Comida fora";
+    if (/uber|\b99 ?(app|pop|tecnologia)|sintur|posto|guanabara|blablacar|onibus|passagem/.test(d)) return "Uber e transporte";
+    if (/assai|supermercado|mercadinho|atacad|frigorif|hortifruti|padaria/.test(d)) return "Mercado";
+    if (/pharma|farmac|drogaria|drogasil|pague menos/.test(d)) return "Farmácia";
+    if (/pix no credito/.test(d)) return "Pix no crédito";
+    if (parcela(desc)) return "Compras parceladas";
+    return "Outros";
+  }
+  function partesDe(l) {
+    if (l.tipo !== "compra") return [];
+    if (l.dono === "dividir") { const ids = divisaoDe(l); return ids ? ids.map((id) => ({ pid: id, v: l.valor / ids.length })) : []; }
+    return pessoa(l.dono) ? [{ pid: l.dono, v: l.valor }] : [];
+  }
+  const pctTxt = (x) => (Math.round(x * 1000) / 10).toLocaleString("pt-BR") + "%";
+  const curto = (v) => "R$ " + Math.round(v).toLocaleString("pt-BR");
+  function utc(iso) { const [y, m, d] = iso.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); }
+  const isoDe = (dt) => dt.toISOString().slice(0, 10);
+  function segundaDe(iso) { const dt = utc(iso); dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7)); return isoDe(dt); }
+  function mesBase(f) {
+    if (f.vencimento && /^\d{4}-\d{2}/.test(f.vencimento)) { const [y, m] = f.vencimento.split("-").map(Number); return { y, m }; }
+    const max = (f.linhas || []).map((l) => l.data).sort().pop() || isoDe(new Date());
+    const [y, m] = max.split("-").map(Number); return m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+  }
+  function mesRel(base, k) { const z = base.m - 1 + k; return { mes: MESES[((z % 12) + 12) % 12], ano: String(base.y + Math.floor(z / 12)).slice(2) }; }
+
+  function dadosCategorias(f, pid) {
+    const itens = [];
+    for (const l of f.linhas || []) for (const p of partesDe(l)) if (p.pid === pid) itens.push({ l, v: p.v });
+    for (const n of itens) {
+      if (n.v >= 0 || n.cancel) continue;
+      const par = itens.find((x) => x.v > 0 && !x.cancel && Math.abs(x.v + n.v) < 0.011);
+      if (par) { par.cancel = true; n.cancel = true; }
+    }
+    const m = new Map();
+    for (const x of itens) {
+      if (x.cancel) continue;
+      const c = x.v < 0 ? "Outros" : categoria(x.l.desc);
+      const o = m.get(c) || { c, v: 0, n: 0 }; o.v += x.v; o.n++; m.set(c, o);
+    }
+    const arr = [...m.values()].map((o) => ({ ...o, v: r2(o.v) })).filter((o) => o.v > 0.004).sort((a, b) => b.v - a.v);
+    return { arr, tot: r2(arr.reduce((a, o) => a + o.v, 0)) };
+  }
+  function dadosUber(f, pid) {
+    const sem = new Map(); let n = 0, tot = 0;
+    for (const l of f.linhas || []) {
+      const d = norm(l.desc);
+      if (l.tipo !== "compra" || !d.includes("uber") || d.includes("uber *one")) continue;
+      for (const p of partesDe(l)) if (p.pid === pid) {
+        const k = segundaDe(l.data); const o = sem.get(k) || { k, v: 0, n: 0 };
+        o.v += p.v; o.n++; sem.set(k, o); n++; tot += p.v;
+      }
+    }
+    if (!n) return { n: 0, tot: 0, semanas: [], media: 0 };
+    const ks = [...sem.keys()].sort(); const semanas = [];
+    for (let dt = utc(ks[0]); isoDe(dt) <= ks[ks.length - 1]; dt.setUTCDate(dt.getUTCDate() + 7)) {
+      const k = isoDe(dt); const o = sem.get(k) || { k, v: 0, n: 0 }; semanas.push({ ...o, v: r2(o.v) });
+    }
+    return { n, tot: r2(tot), semanas, media: r2(tot / semanas.length) };
+  }
+  function dadosFuturas(f) {
+    const base = mesBase(f); const meses = new Map();
+    for (const l of f.linhas || []) {
+      if (l.tipo !== "compra") continue;
+      const p = parcela(l.desc); if (!p || p.tot <= p.n) continue;
+      const partes = partesDe(l);
+      for (let k = 1; k <= Math.min(p.tot - p.n, 12); k++) {
+        const o = meses.get(k) || { k, pp: {}, sem: 0 };
+        if (partes.length) for (const x of partes) o.pp[x.pid] = (o.pp[x.pid] || 0) + x.v; else o.sem += l.valor;
+        meses.set(k, o);
+      }
+    }
+    return [...meses.values()].sort((a, b) => a.k - b.k).map((o) => {
+      const r = mesRel(base, o.k); const tot = r2(Object.values(o.pp).reduce((a, v) => a + v, 0) + o.sem);
+      return { ...o, mes: r.mes, ano: r.ano, tot };
+    });
+  }
+  function dadosHistorico() {
+    return [...S.faturas.keys()].sort().map((id) => {
+      const f = S.faturas.get(id); const t = totais(f); const r = mesRel(mesBase(f), f.vencimento ? 0 : -1);
+      return { id, mes: r.mes, ano: r.ano, rotulo: f.rotulo || id, t };
+    });
+  }
+
+  function barrasH(rows, est) {
+    const max = Math.max(...rows.map((r) => r.v), 0.01);
+    return h("div", { class: "hbars" }, rows.map((r) => h("div", { class: "hbar", tabindex: "0", "data-tip-v": fmt(r.v), "data-tip-l": r.tip, "aria-label": `${r.rot}: ${fmt(r.v)}, ${r.pct}` },
+      h("span", { class: "rot" }, r.rot, h("small", { text: r.pct })),
+      h("span", { class: "trilho" }, h("span", { class: "barra", style: `${est};--f:${(r.v / max).toFixed(4)}` }), h("span", { class: "val", text: fmt(r.v) })))));
+  }
+  function colunas(cols, capsTodas) {
+    const plotH = 150; const max = Math.max(...cols.map((c) => c.tot), 0.01);
+    const iMax = cols.reduce((im, c, i) => (c.tot > cols[im].tot ? i : im), 0);
+    const area = h("div", { class: "cols", style: `height:${plotH + 22}px` });
+    const xs = h("div", { class: "xlab", "aria-hidden": "true" });
+    cols.forEach((c, i) => {
+      const segs = c.segs.filter((s) => s.v > 0.004);
+      const alt = c.tot > 0 ? Math.max(3, Math.round((c.tot / max) * plotH)) : 0;
+      const disp = Math.max(segs.length, alt - 2 * Math.max(0, segs.length - 1));
+      const linhas = [c.rotLongo, ...(segs.length > 1 ? segs.map((s) => `${s.nome}: ${fmt(s.v)}`) : []), ...(c.extra ? [c.extra] : [])].join("\n");
+      const mostraCap = capsTodas || i === 0 || i === iMax;
+      area.append(h("div", { class: "col", tabindex: "0", "data-tip-v": fmt(c.tot), "data-tip-l": linhas, "aria-label": `${c.rotLongo}: ${fmt(c.tot)}` },
+        h("span", { class: "cap", text: mostraCap && c.tot > 0 ? curto(c.tot) : "" }),
+        h("span", { class: "pilha", style: `height:${alt}px` }, segs.map((s) => h("span", { class: "seg", style: `${s.est};height:${Math.max(1, (s.v / c.tot) * disp).toFixed(1)}px` })))));
+      xs.append(h("span", null, c.rot, c.sub ? h("small", { text: c.sub }) : null));
+    });
+    return h("div", null, area, xs);
+  }
+  function legenda(itens) { return h("div", { class: "legenda" }, itens.map((it) => h("span", { class: "leg" }, h("i", { style: it.est }), it.nome))); }
+  function tabelaVer(cab, linhas) {
+    return h("details", { class: "tabela" }, h("summary", null, h("span", { class: "s-left", text: "Ver como tabela" })),
+      h("div", { class: "tab-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, cab.map((c, i) => h("th", { class: i ? "n" : null, text: c })))),
+        h("tbody", null, linhas.map((l) => h("tr", null, l.map((c, i) => h("td", { class: i ? "n" : null, text: c }))))))));
+  }
+
+  function renderGraficos(f, t) {
+    if (!S.pessoaGraf || !pessoa(S.pessoaGraf)) {
+      const alvo = S.pessoas.find((p) => p.id !== S.dona && (t.parte[p.id] || 0) > 0) || S.pessoas.find((p) => p.id !== S.dona) || S.pessoas[0];
+      S.pessoaGraf = alvo.id;
+    }
+    const pid = S.pessoaGraf; const pn = nome(pid);
+
+    // 1) parcelas futuras (todas as pessoas)
+    const fut = dadosFuturas(f);
+    const quem = S.pessoas.filter((p) => fut.some((m) => (m.pp[p.id] || 0) > 0.004));
+    const temSem = fut.some((m) => m.sem > 0.004);
+    const serie = (m) => [...quem.map((p) => ({ v: r2(m.pp[p.id] || 0), est: estilo(p.id), nome: p.nome })), ...(temSem ? [{ v: r2(m.sem), est: "--pc:var(--sem)", nome: "Sem dono" }] : [])];
+    const prox = fut[0];
+    const cardFut = h("div", { class: "card" },
+      h("h2", { text: "Parcelas que ainda vão cair" }),
+      h("p", { class: "chart-sub", text: prox ? `A próxima fatura (${prox.mes}/${prox.ano}) já começa com ${fmt(prox.tot)} em parcelas de compras desta: ` + serie(prox).filter((s) => s.v > 0).map((s) => `${s.nome} ${fmt(s.v)}`).join(", ") + "." : "Nenhuma parcela desta fatura continua nas próximas." }),
+      prox ? legenda([...quem.map((p) => ({ est: estilo(p.id), nome: p.nome })), ...(temSem ? [{ est: "--pc:var(--sem)", nome: "Sem dono" }] : [])]) : null,
+      prox ? colunas(fut.map((m, i) => ({ rot: m.mes, sub: i === 0 || m.mes === "jan" ? m.ano : "", rotLongo: `Fatura de ${m.mes}/${m.ano}`, tot: m.tot, segs: serie(m) })), fut.length <= 6) : null,
+      prox ? tabelaVer(["Fatura", ...quem.map((p) => p.nome), ...(temSem ? ["Sem dono"] : []), "Total"],
+        fut.map((m) => [`${m.mes}/${m.ano}`, ...serie(m).map((s) => fmt(s.v)), fmt(m.tot)])) : null);
+
+    // 2) histórico (todas as pessoas)
+    const hist = dadosHistorico();
+    let cardHist;
+    if (hist.length < 2) {
+      cardHist = h("div", { class: "card" }, h("h2", { text: "Histórico das faturas" }),
+        h("p", { class: "chart-sub", text: "Aparece a partir da segunda fatura: cada mês que vocês subirem entra aqui, lado a lado, pra comparar quanto foi de cada um." }));
+    } else {
+      const ativos = S.pessoas.filter((p) => hist.some((x) => (x.t.parte[p.id] || 0) > 0.004));
+      const temSemH = hist.some((x) => x.t.sem > 0.004);
+      const serieH = (x) => [...ativos.map((p) => ({ v: x.t.parte[p.id] || 0, est: estilo(p.id), nome: p.nome })), ...(temSemH ? [{ v: x.t.sem, est: "--pc:var(--sem)", nome: "Sem dono" }] : [])];
+      cardHist = h("div", { class: "card" }, h("h2", { text: "Histórico das faturas" }),
+        h("p", { class: "chart-sub", text: "Quanto foi de cada pessoa em cada fatura." }),
+        legenda([...ativos.map((p) => ({ est: estilo(p.id), nome: p.nome })), ...(temSemH ? [{ est: "--pc:var(--sem)", nome: "Sem dono" }] : [])]),
+        colunas(hist.map((x, i) => ({ rot: x.mes, sub: i === 0 || x.mes === "jan" ? x.ano : "", rotLongo: x.rotulo, tot: x.t.tot, segs: serieH(x) })), hist.length <= 6),
+        tabelaVer(["Fatura", ...ativos.map((p) => p.nome), ...(temSemH ? ["Sem dono"] : []), "Total"],
+          hist.map((x) => [x.rotulo, ...serieH(x).map((s) => fmt(s.v)), fmt(x.t.tot)])));
+    }
+
+    // 3) por pessoa: filtro acima dos gráficos que ele controla
+    const filtro = h("div", { class: "filtro", role: "group", "aria-label": "Ver gráficos de uma pessoa" },
+      h("span", { class: "muted small", text: "Gráficos de:" }),
+      S.pessoas.map((p) => h("button", { type: "button", class: "pbtn", style: estilo(p.id), "data-act": "pessoa-graf", "data-pid": p.id, "aria-pressed": p.id === pid ? "true" : "false", text: p.nome })));
+    const cat = dadosCategorias(f, pid);
+    const cardCat = h("div", { class: "card" },
+      h("h2", { text: `Pra onde foi o dinheiro de ${pn}` }),
+      h("p", { class: "chart-sub", text: cat.tot ? `${fmt(cat.tot)} nesta fatura, por tipo de gasto.` + (t.nSem ? ` Ainda há ${fmt(t.sem)} sem dono, que não entram aqui.` : "") : `Nada de ${pn} nesta fatura ainda.` }),
+      cat.arr.length ? barrasH(cat.arr.map((o) => ({ rot: o.c, v: o.v, pct: pctTxt(o.v / cat.tot), tip: `${o.c} · ${pctTxt(o.v / cat.tot)} · ${o.n} compra${o.n === 1 ? "" : "s"}` })), estilo(pid)) : null,
+      cat.arr.length ? tabelaVer(["Tipo de gasto", "Valor", "%", "Compras"], cat.arr.map((o) => [o.c, fmt(o.v), pctTxt(o.v / cat.tot), String(o.n)])) : null);
+    const ub = dadosUber(f, pid);
+    const cardUber = h("div", { class: "card" },
+      h("h2", { text: `Uber de ${pn}, semana a semana` }),
+      h("p", { class: "chart-sub", text: ub.n ? `${ub.n} corridas, ${fmt(ub.tot)} no total: média de ${fmt(ub.media)} por semana.` : `Nenhuma corrida de Uber de ${pn} nesta fatura.` }),
+      ub.n ? colunas(ub.semanas.map((w) => ({ rot: diaMes(w.k), sub: `${w.n}\n${w.n === 1 ? "corrida" : "corridas"}`, rotLongo: `Semana de ${diaMes(w.k)}`, extra: `${w.n} corrida${w.n === 1 ? "" : "s"}`, tot: w.v, segs: [{ v: w.v, est: estilo(pid), nome: pn }] })), true) : null,
+      ub.n ? tabelaVer(["Semana (segunda)", "Corridas", "Valor"], ub.semanas.map((w) => [diaMes(w.k), String(w.n), fmt(w.v)])) : null);
+
+    fill($("#graficos"), cardFut, cardHist, filtro, cardCat, cardUber);
+  }
+
+  // dica ao passar o dedo/mouse ou focar
+  const tip = document.createElement("div"); tip.className = "tip hidden"; tip.setAttribute("role", "tooltip"); document.body.append(tip);
+  let tipAlvo = null;
+  function esconderTip() { tip.classList.add("hidden"); tipAlvo = null; }
+  function mostrarTip(el) {
+    tipAlvo = el;
+    const linhas = String(el.getAttribute("data-tip-l") || "").split("\n").filter(Boolean);
+    fill(tip, h("strong", { text: el.getAttribute("data-tip-v") || "" }), linhas.map((x) => h("span", { text: x })));
+    tip.classList.remove("hidden");
+    const r = el.getBoundingClientRect(); const tw = tip.offsetWidth, th = tip.offsetHeight;
+    const x = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 8));
+    let y = r.top - th - 8; if (y < 8) y = r.bottom + 8;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  }
+  document.addEventListener("pointerover", (e) => { const el = e.target.closest && e.target.closest("[data-tip-v]"); if (el) mostrarTip(el); });
+  document.addEventListener("pointerout", (e) => { const el = e.target.closest && e.target.closest("[data-tip-v]"); if (el && !(e.relatedTarget && el.contains(e.relatedTarget))) esconderTip(); });
+  document.addEventListener("focusin", (e) => { const el = e.target.closest && e.target.closest("[data-tip-v]"); if (el) mostrarTip(el); else esconderTip(); });
+  window.addEventListener("scroll", () => { if (tipAlvo && tipAlvo.isConnected && document.activeElement === tipAlvo) mostrarTip(tipAlvo); else esconderTip(); }, { passive: true });
+  window.addEventListener("hashchange", () => { S.view = location.hash === "#graficos" ? "graficos" : "separar"; render(); });
+
+  // ---------- eventos ----------
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-act]"); if (!b || b.disabled) return;
+    const act = b.dataset.act; const fid = b.dataset.fid; const i = Number(b.dataset.i);
+    if (act === "dono") {
+      const d = b.dataset.dono; const l = S.faturas.get(fid)?.linhas.find((x) => x.i === i);
+      S.abrirDiv = null; definir(fid, i, l && l.dono === d ? null : d, "manual");
+    }
+    else if (act === "abrir-div") { const key = fid + ":" + i; S.abrirDiv = S.abrirDiv === key ? null : key; render(); }
+    else if (act === "fechar-div") { S.abrirDiv = null; render(); }
+    else if (act === "confirmar-div") {
+      const box = b.closest(".divpick");
+      const ids = [...box.querySelectorAll(".chk-div:checked")].map((x) => x.value).filter((id) => pessoa(id));
+      S.abrirDiv = null;
+      if (ids.length === 1) definir(fid, i, ids[0], "manual");
+      else if (ids.length > 1) definir(fid, i, "dividir", "manual", ids);
+      else render();
+    }
+    else if (act === "aba") { const alvo = b.dataset.aba === "graficos" ? "graficos" : "separar"; if (location.hash !== "#" + alvo) location.hash = alvo; else { S.view = alvo; render(); } }
+    else if (act === "pessoa-graf") { if (pessoa(b.dataset.pid)) { S.pessoaGraf = b.dataset.pid; render(); } }
+    else if (act === "aceitar") definir(fid, i, b.dataset.dono, "ia");
+    else if (act === "aceitar-todas") aceitarTodas();
+    else if (act === "sugerir") sugerir();
+    else if (act === "copiar") copiarResumo(b.dataset.pid);
+    else if (act === "fechar-copia") { S.textoCopia = null; render(); }
+    else if (act === "apagar-regra") apagarRegra(b.dataset.id);
+    else if (act === "pedir-remover") { S.removendo = b.dataset.pid; render(); }
+    else if (act === "cancelar-remover") { S.removendo = null; render(); }
+    else if (act === "confirmar-remover") removerPessoa(b.dataset.pid);
+    else if (act === "confirmar-upload") confirmarUpload();
+    else if (act === "fechar-upload") { S.upload = null; S.uploadErro = ""; S.uploadTitulo = ""; S.restaurar = null; render(); }
+    else if (act === "confirmar-restaurar") confirmarRestaurar();
+    else if (act === "backup-baixar") baixarBackup();
+    else if (act === "backup-enviar") enviarBackup();
+  });
+  document.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (t.id === "sel-fatura") { S.atual = t.value; S.aiMsg = ""; S.abrirDiv = null; render(); }
+    else if (t.id === "chk-lembrar") { S.lembrar = t.checked; }
+    else if (t.id === "inp-file") { const file = t.files && t.files[0]; if (file) lerArquivo(file); t.value = ""; }
+    else if (t.id === "inp-backup") { const file = t.files && t.files[0]; if (file) lerBackup(file); t.value = ""; }
+    else if (t.classList.contains("sel-pagador")) definirPagador(t.dataset.fid, Number(t.dataset.i), t.value);
+    else if (t.classList.contains("inp-nome")) renomearPessoa(t.dataset.pid, t.value);
+    else if (t.classList.contains("rad-dona") && t.checked && pessoa(t.value)) { S.dona = t.value; salvarPessoas(); render(); }
+  });
+  document.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    if (S.readOnly || !S.db) return;
+    if (ev.target.id === "form-regra") {
+      const p = $("#inp-padrao").value; const d = $("#sel-dono").value;
+      if (norm(p).length >= 3 && (d === "dividir" || pessoa(d))) { salvarRegra(p, d, d === "dividir" ? divPadrao() : null); render(); }
+    } else if (ev.target.id === "form-pessoa") {
+      adicionarPessoa($("#inp-nova-pessoa").value);
+    }
+  });
+  for (const ev of ["dragover", "dragenter"]) document.addEventListener(ev, (e) => { e.preventDefault(); $("#drop1").classList.add("over"); });
+  document.addEventListener("dragleave", () => $("#drop1").classList.remove("over"));
+  document.addEventListener("drop", (e) => {
+    e.preventDefault(); $("#drop1").classList.remove("over");
+    if (S.readOnly || !S.db) return;
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (file) lerArquivo(file);
+  });
+
+  // ---------- inicialização ----------
+  render();
+  (async () => {
+    const db = criarBanco("fatura-a-dois:v1");
+    if (!db) { S.semDb = true; render(); return; }
+    S.db = db; S.podeEscrever = true; S.souDono = true; S.sample = null;
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) { /* sem suporte */ }
+    const timer = setTimeout(() => { S.lento = true; render(); }, 10000);
+    const limpar = () => { if (S.carregou.faturas && S.carregou.regras) { clearTimeout(timer); S.lento = false; } };
+    db.collection("faturas").onSnapshot((snap) => {
+      for (const d of snap.docs) { if (ocupado(d.id)) continue; const data = d.data(); if (data && Array.isArray(data.linhas)) S.faturas.set(d.id, clone(data)); }
+      for (const id of [...S.faturas.keys()]) if (!snap.docs.some((d) => d.id === id) && !ocupado(id)) S.faturas.delete(id);
+      if (!snap.metadata.fromCache) { S.carregou.faturas = true; limpar(); }
+      render();
+    }, () => { S.carregou.faturas = true; limpar(); render(); });
+    db.collection("regras").onSnapshot((snap) => {
+      const m = new Map();
+      for (const d of snap.docs) {
+        const x = d.data() || {};
+        if (!x.padrao || !x.dono) continue;
+        const r = { id: d.id, padrao: norm(x.padrao), dono: String(x.dono) };
+        if (Array.isArray(x.divisao)) r.divisao = x.divisao.map(String);
+        m.set(d.id, r);
+      }
+      S.regras = m;
+      if (!snap.metadata.fromCache) { S.carregou.regras = true; limpar(); }
+      render();
+    }, () => { S.carregou.regras = true; limpar(); render(); });
+    db.doc("config/pessoas").onSnapshot((d) => {
+      const x = d.exists ? d.data() : null;
+      if (x && Array.isArray(x.lista) && x.lista.length) {
+        S.temPessoas = true;
+        S.pessoas = x.lista.filter((p) => p && p.id).slice(0, MAX_PESSOAS).map((p) => ({ id: String(p.id), nome: String(p.nome || "?").slice(0, 30) }));
+        S.dona = pessoa(x.dona) ? x.dona : (pessoa("ela") ? "ela" : S.pessoas[0].id);
+        render();
+      }
+    }, () => {});
+    db.doc("config/nomes").onSnapshot((d) => {
+      const x = d.exists ? d.data() : null;
+      if (x && !S.temPessoas) {
+        const ele = pessoa("ele"), ela = pessoa("ela");
+        if (ele && x.ele) ele.nome = String(x.ele).slice(0, 30);
+        if (ela && x.ela) ela.nome = String(x.ela).slice(0, 30);
+        render();
+      }
+    }, () => {});
+  })();
+})();
+</script>
+</body>
+</html>
