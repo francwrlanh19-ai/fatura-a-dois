@@ -1,0 +1,111 @@
+{
+ "app": "fatura-a-dois",
+ "versao": 1,
+ "exportadoEm": "2026-11-30T12:00:00.000Z",
+ "dados": {
+  "config/pessoas": {
+   "dona": "ela",
+   "lista": [
+    {
+     "id": "ele",
+     "nome": "Beto"
+    },
+    {
+     "id": "ela",
+     "nome": "Ana"
+    },
+    {
+     "id": "p-carla",
+     "nome": "Carla"
+    },
+    {
+     "id": "p-davi",
+     "nome": "Davi"
+    }
+   ]
+  },
+  "regras/uber": {
+   "padrao": "uber",
+   "dono": "ele",
+   "criadoEm": "2026-11-30T12:00:00.000Z"
+  },
+  "regras/padaria-sol": {
+   "padrao": "padaria sol",
+   "dono": "dividir",
+   "divisao": [
+    "ele",
+    "ela"
+   ],
+   "criadoEm": "2026-11-30T12:00:00.000Z"
+  },
+  "faturas/2026-12-11": {
+   "rotulo": "Vencimento 11/12/2026",
+   "vencimento": "2026-12-11",
+   "criadoEm": "2026-11-30T12:00:00.000Z",
+   "atualizadoEm": "2026-11-30T12:00:00.000Z",
+   "linhas": [
+    {
+     "i": 0,
+     "data": "2026-11-28",
+     "desc": "Uber *Trip",
+     "valor": 12.5,
+     "tipo": "compra",
+     "dono": "ele",
+     "via": "regra"
+    },
+    {
+     "i": 1,
+     "data": "2026-11-27",
+     "desc": "Padaria Sol",
+     "valor": 18.0,
+     "tipo": "compra",
+     "dono": "dividir",
+     "divisao": [
+      "ele",
+      "ela"
+     ],
+     "via": "regra"
+    },
+    {
+     "i": 2,
+     "data": "2026-11-26",
+     "desc": "Livraria Imaginaria",
+     "valor": 45.9,
+     "tipo": "compra",
+     "dono": "p-carla",
+     "via": "manual"
+    },
+    {
+     "i": 3,
+     "data": "2026-11-25",
+     "desc": "Farmacia Exemplo",
+     "valor": 32.1,
+     "tipo": "compra"
+    },
+    {
+     "i": 4,
+     "data": "2026-11-24",
+     "desc": "Loja Ficticia - Parcela 2/5",
+     "valor": 60.0,
+     "tipo": "compra",
+     "dono": "ela",
+     "via": "manual"
+    },
+    {
+     "i": 5,
+     "data": "2026-11-20",
+     "desc": "Pagamento recebido",
+     "valor": -100.0,
+     "tipo": "pagamento"
+    },
+    {
+     "i": 6,
+     "data": "2026-11-19",
+     "desc": "Cinema Inventado",
+     "valor": 40.0,
+     "tipo": "compra"
+    }
+   ]
+  }
+ }
+}

@@ -63,7 +63,7 @@ p { margin: 0; }
 header.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; }
 .top-left { display: grid; gap: 4px; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-select, input[type="text"], textarea {
+select, input[type="text"], input[type="password"], textarea {
   font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
   border-radius: 8px; padding: 8px 10px; min-height: 40px;
 }
@@ -131,7 +131,16 @@ summary .s-left { flex: 1; }
 .pessoa-row input[type="text"] { flex: 1 1 140px; }
 .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); flex: none; }
 .form-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.form-row input[type="text"] { flex: 1 1 200px; }
+.form-row input[type="text"], .form-row input[type="password"] { flex: 1 1 200px; }
+.form-row .full { flex-basis: 100%; }
+.nuvem-status { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-size: 13px; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.nuvem-status .nv-txt { flex: 1 1 200px; }
+.nv-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.nv-dot.edit { background: var(--accent); }
+.nv-dot.bad { background: var(--bad); }
+.txt-erro { color: var(--bad); }
+.inp-link { width: 100%; }
 .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 20px; text-align: center; color: var(--muted); }
 .drop.over { border-color: var(--accent); color: var(--ink); }
 label.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
@@ -191,6 +200,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     </div>
   </header>
 
+  <div id="nuvem-status" class="nuvem-status hidden" role="status" aria-live="polite"></div>
+
   <nav id="abas" class="tabs hidden" aria-label="Telas do app">
     <button type="button" class="tab" data-act="aba" data-aba="separar" aria-pressed="true">Separar</button>
     <button type="button" class="tab" data-act="aba" data-aba="graficos" aria-pressed="false">Gráficos</button>
@@ -214,9 +225,10 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   <section id="separadas" class="card hidden"></section>
   <section id="pagamentos" class="card hidden"></section>
   <section id="ajustes" class="card hidden"></section>
+  <section id="nuvem" class="card hidden"></section>
 
   <footer>
-    <p>Os dados ficam guardados só neste celular, dentro do navegador. Nada vai pra internet. Faça um backup de vez em quando (em “Backup”, lá embaixo) e guarde o arquivo.</p>
+    <p id="rodape-dados">Os dados ficam guardados só neste celular, dentro do navegador. Nada vai pra internet. Faça um backup de vez em quando (em “Backup”, lá embaixo) e guarde o arquivo.</p>
     <p>As outras pessoas não precisam abrir o app: use “Copiar resumo” e mande a parte de cada uma.</p>
   </footer>
 </div>
@@ -247,7 +259,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     regras: new Map(), faturas: new Map(), atual: null, sug: new Map(), lembrar: true,
     carregou: { faturas: false, regras: false }, lento: false, aiBusy: false, aiMsg: "",
     upload: null, uploadErro: "", erroEscrita: "", abrirDiv: null, copiado: null, textoCopia: null, removendo: null,
-    podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "",
+    podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "", soLeitura: false,
     view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null,
   };
 
@@ -683,12 +695,16 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
 
     const av = $("#aviso"); const msgs = [];
     if (S.semDb) msgs.push("Este navegador não deixou o app guardar dados. Se estiver numa aba anônima, abra numa aba normal.");
-    else if (S.readOnly) msgs.push(S.erroEscrita || "Seu acesso a este app é só de visualização: você não vê as faturas lançadas nem consegue mudar nada. Peça para quem criou o app te convidar por e-mail com permissão de edição (“Pode editar”).");
+    else if (S.readOnly && !S.soLeitura) msgs.push(S.erroEscrita || "Seu acesso a este app é só de visualização: você não vê as faturas lançadas nem consegue mudar nada. Peça para quem criou o app te convidar por e-mail com permissão de edição (“Pode editar”).");
     else if (S.erroEscrita) msgs.push(S.erroEscrita);
     if (S.lento && !(S.carregou.faturas && S.carregou.regras)) msgs.push("Os dados estão demorando para carregar. O que aparece pode estar desatualizado.");
     fill(av, ...msgs.map((m) => h("p", { text: m })));
     av.classList.toggle("hidden", !msgs.length);
-    av.classList.toggle("bad", S.semDb || S.readOnly);
+    av.classList.toggle("bad", S.semDb || (S.readOnly && !S.soLeitura));
+    desenharNuvemStatus();
+    $("#rodape-dados").textContent = NV.ativo
+      ? "Os dados ficam neste celular e numa cópia no GitHub, trancada com a senha que vai no link. Sem o link, ninguém consegue ler."
+      : "Os dados ficam guardados só neste celular, dentro do navegador. Nada vai pra internet. Faça um backup de vez em quando (em “Backup”, lá embaixo) e guarde o arquivo.";
 
     const up = $("#upload");
     if (S.restaurar) {
@@ -696,7 +712,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
       up.classList.remove("hidden");
       fill(up, h("h2", { text: "Restaurar backup" }),
         h("p", { text: `“${r.nomeArq}”${r.quando ? ", feito em " + dataBR(r.quando.slice(0, 10)) : ""}: ${r.faturas} fatura${r.faturas === 1 ? "" : "s"}, ${r.regras} regra${r.regras === 1 ? "" : "s"} e ${r.pessoas} pessoa${r.pessoas === 1 ? "" : "s"}.` }),
-        S.faturas.size ? h("p", { class: "muted small", text: "Isso substitui o que está salvo neste celular agora." }) : null,
+        NV.ativo ? h("p", { class: "muted small", text: "Isso troca a fatura compartilhada: quem tem o link passa a ver o que está no backup." })
+          : S.faturas.size ? h("p", { class: "muted small", text: "Isso substitui o que está salvo neste celular agora." }) : null,
         h("div", { class: "controls" },
           h("button", { type: "button", class: "btn primary", "data-act": "confirmar-restaurar", text: "Restaurar" }),
           h("button", { type: "button", class: "btn", "data-act": "fechar-upload", text: "Cancelar" })));
@@ -727,7 +744,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
 
     const f = S.atual ? S.faturas.get(S.atual) : null;
     const carregado = S.carregou.faturas || S.semDb;
-    $("#vazio").classList.toggle("hidden", !!f || !carregado || S.semDb || S.readOnly);
+    $("#vazio").classList.toggle("hidden", !!f || !carregado || S.semDb || S.readOnly || (NV.ativo && !NV.pronto));
     $("#vazio-dica").classList.toggle("hidden", S.souDono !== false);
     const naGraf = S.view === "graficos";
     $("#abas").classList.toggle("hidden", !f);
@@ -736,7 +753,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     for (const id of ["#semdono", "#separadas", "#pagamentos"]) $(id).classList.toggle("hidden", !f || naGraf);
     $("#graficos").classList.toggle("hidden", !f || !naGraf);
     esconderTip();
-    if (!f) { desenharAjustes(); return; }
+    if (!f) { desenharAjustes(); desenharNuvem(); return; }
     const fid = S.atual; const t = totais(f);
     if (naGraf) renderGraficos(f, t);
 
@@ -802,6 +819,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
         })) : h("p", { class: "muted small", text: "Nenhum pagamento nesta fatura." })));
 
     desenharAjustes();
+    desenharNuvem();
   }
 
   function desenharAjustes() {
@@ -851,7 +869,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
 
 
   // ---------- banco local (navegador) ----------
-  function criarBanco(chave) {
+  // aoGravar(caminhos) é chamado depois de cada mudança feita neste celular (não nas que chegam do compartilhamento).
+  function criarBanco(chave, aoGravar) {
     let dados;
     try { dados = JSON.parse(localStorage.getItem(chave) || "{}") || {}; localStorage.setItem(chave + ":teste", "1"); localStorage.removeItem(chave + ":teste"); }
     catch (_) { return null; }
@@ -870,8 +889,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
       doc(path) {
         return { id: path.split("/").pop(), path,
           get: async () => snapDoc(path),
-          set: async (d) => { const ant = dados[path]; dados[path] = copia(d); try { gravar(); } catch (e) { if (ant === undefined) delete dados[path]; else dados[path] = ant; throw e; } avisar(); },
-          delete: async () => { delete dados[path]; gravar(); avisar(); },
+          set: async (d) => { const ant = dados[path]; dados[path] = copia(d); try { gravar(); } catch (e) { if (ant === undefined) delete dados[path]; else dados[path] = ant; throw e; } if (aoGravar) aoGravar([path]); avisar(); },
+          delete: async () => { delete dados[path]; gravar(); if (aoGravar) aoGravar([path]); avisar(); },
           onSnapshot(cb) { const o = { tipo: "d", path, cb }; ouvintes.add(o); setTimeout(() => cb(snapDoc(path)), 0); return () => ouvintes.delete(o); } };
       },
       collection(path) {
@@ -879,7 +898,11 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
           onSnapshot(cb) { const o = { tipo: "c", path, cb }; ouvintes.add(o); setTimeout(() => cb(snapCol(path)), 0); return () => ouvintes.delete(o); } };
       },
       exportar: () => copia(dados),
-      substituir: (novo) => { const ant = dados; dados = copia(novo); try { gravar(); } catch (e) { dados = ant; throw e; } avisar(); },
+      substituir: (novo, op) => {
+        const ant = dados; dados = copia(novo); try { gravar(); } catch (e) { dados = ant; throw e; }
+        if (aoGravar && !(op && op.remoto)) aoGravar([...new Set([...Object.keys(ant), ...Object.keys(dados)])]);
+        avisar();
+      },
     };
     return db;
   }
@@ -924,6 +947,370 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     try { S.db.substituir(r.dados); S.restaurar = null; S.atual = null; S.temPessoas = false; S.erroEscrita = ""; }
     catch (e) { S.restaurar = null; erroEscrita(e); }
     render();
+  }
+
+  // ---------- compartilhamento ----------
+  // Os dados vão para o arquivo dados.json na branch "dados" do próprio repositório, trancados (AES-GCM) com a senha
+  // que vai no link (#k=...). Quem tem só o link vê; quem também tem a chave do GitHub (token) edita.
+  const K_CFG = "fatura-a-dois:compartilhar", K_CACHE = "fatura-a-dois:compartilhado", K_PEND = "fatura-a-dois:compartilhado:pendentes", K_LOCAL = "fatura-a-dois:v1";
+  const RAMO = "dados", ARQ = "dados.json", ITER = 100000;
+  const REPO = (() => {
+    const host = location.hostname, seg = location.pathname.split("/").filter(Boolean)[0];
+    if (/\.github\.io$/i.test(host) && seg) return { dono: host.replace(/\.github\.io$/i, ""), nome: seg };
+    return { dono: "francwrlanh19-ai", nome: "fatura-a-dois" };
+  })();
+  const API = `https://api.github.com/repos/${REPO.dono}/${REPO.nome}`;
+  const NV = { ativo: false, segredo: "", token: "", sha: null, sal: null, velhos: new Set(), pronto: false, buscando: false, enviando: false,
+    testando: false, buscadoEm: 0, alteradoEm: null, erro: "", vazio: false, timerEnvio: null, abrir: false, confirmar: null,
+    msgChave: "", msgLink: "", copiou: false, mostrarLink: false, assinatura: "" };
+  const te = new TextEncoder(), td = new TextDecoder();
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+  const lsLer = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+  const lsGravar = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch (_) { return false; } };
+  const SENHA_OK = /^[A-Za-z0-9_-]{16,64}$/;
+  function lerCfg() {
+    try { const c = JSON.parse(lsLer(K_CFG) || "null"); return c && SENHA_OK.test(c.k) ? { k: c.k, t: typeof c.t === "string" ? c.t : "" } : null; }
+    catch (_) { return null; }
+  }
+  const gravarCfg = (c) => lsGravar(K_CFG, c ? JSON.stringify(c) : null);
+  function lerPend() { try { return JSON.parse(lsLer(K_PEND) || "{}") || {}; } catch (_) { return {}; } }
+  const gravarPend = (p) => lsGravar(K_PEND, Object.keys(p).length ? JSON.stringify(p) : null);
+  const nPend = () => Object.keys(lerPend()).length;
+  function marcarPendentes(caminhos) {
+    if (!NV.ativo || !NV.token) return;
+    const p = lerPend(); for (const c of caminhos) p[c] = (p[c] || 0) + 1;
+    gravarPend(p); agendarEnvio();
+  }
+  // Abrir o link com #k=senha guarda a senha neste celular e tira ela da barra de endereço.
+  function senhaDaHash() {
+    const m = /^#k=([A-Za-z0-9_-]{16,64})$/.exec(location.hash || "");
+    if (!m) return;
+    const ant = lerCfg();
+    gravarCfg({ k: m[1], t: ant ? ant.t : "" });
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* ignora */ }
+  }
+
+  // cifra
+  function b64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
+  function deB64(str) { const bin = atob(String(str || "").replace(/[^A-Za-z0-9+/=]/g, "")); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+  async function passarPor(bytes, fluxo) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(fluxo)).arrayBuffer()); }
+  const chavesCifra = new Map();
+  async function chaveCifra(sal, iter) {
+    const id = NV.segredo + "|" + b64(sal) + "|" + iter;
+    if (!chavesCifra.has(id)) {
+      const base = await crypto.subtle.importKey("raw", te.encode(NV.segredo), "PBKDF2", false, ["deriveKey"]);
+      chavesCifra.set(id, await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: sal, iterations: iter }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]));
+    }
+    return chavesCifra.get(id);
+  }
+  async function trancar(dados, sal) {
+    let corpo = te.encode(JSON.stringify({ app: "fatura-a-dois", versao: 1, dados }));
+    let compactado = "nenhum";
+    // só compacta quando fica grande (celulares antigos não abrem gzip)
+    if (corpo.length > 400000 && typeof CompressionStream !== "undefined") { try { corpo = await passarPor(corpo, new CompressionStream("gzip")); compactado = "gzip"; } catch (_) { /* vai sem compactar */ } }
+    sal = sal || crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cif = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await chaveCifra(sal, ITER), corpo));
+    return { app: "fatura-a-dois", formato: 1, atualizadoEm: new Date().toISOString(), compactado, kdf: { nome: "PBKDF2-SHA256", iteracoes: ITER, sal: b64(sal) }, iv: b64(iv), cifrado: b64(cif) };
+  }
+  const CAMINHO_OK = /^(faturas|regras|config)\/[A-Za-z0-9_\-.~:@+]+$/;
+  const docsValidos = (d) => !!d && typeof d === "object" && !Array.isArray(d) && Object.keys(d).every((k) => CAMINHO_OK.test(k) && d[k] && typeof d[k] === "object");
+  async function destrancar(arq) {
+    if (!arq || arq.app !== "fatura-a-dois" || arq.formato !== 1 || !arq.kdf || !arq.iv || !arq.cifrado) throw { code: "formato" };
+    const sal = deB64(arq.kdf.sal);
+    let corpo;
+    try { corpo = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: deB64(arq.iv) }, await chaveCifra(sal, Number(arq.kdf.iteracoes) || ITER), deB64(arq.cifrado))); }
+    catch (_) { throw { code: "senha" }; }
+    if (arq.compactado === "gzip") {
+      if (typeof DecompressionStream === "undefined") throw { code: "navegador" };
+      corpo = await passarPor(corpo, new DecompressionStream("gzip"));
+    }
+    let obj; try { obj = JSON.parse(td.decode(corpo)); } catch (_) { throw { code: "formato" }; }
+    if (!obj || obj.app !== "fatura-a-dois" || !docsValidos(obj.dados)) throw { code: "formato" };
+    return { dados: obj.dados, sal };
+  }
+
+  // GitHub
+  function cabecalhos(comChave) { const c = { Accept: "application/vnd.github+json" }; if (comChave && NV.token) c.Authorization = "Bearer " + NV.token; return c; }
+  async function pedir(url, op) { try { return await fetch(url, op); } catch (_) { throw { code: "rede" }; } }
+  async function lerRemoto() {
+    let comChave = !!NV.token, res;
+    for (;;) {
+      res = await pedir(`${API}/contents/${ARQ}?ref=${RAMO}`, { headers: cabecalhos(comChave), cache: comChave ? "no-store" : "no-cache" });
+      if (res.status === 401 && comChave) throw { code: "chave" };
+      if (res.status === 403 && comChave) { comChave = false; continue; }
+      break;
+    }
+    if (res.status === 404) return { sha: null, dados: null };
+    let texto, sha = null;
+    if (res.status === 403 || res.status === 429) {
+      // limite da API para quem não tem chave: lê pelo endereço "raw" (pode vir com alguns minutos de atraso)
+      const r2 = await pedir(`https://raw.githubusercontent.com/${REPO.dono}/${REPO.nome}/${RAMO}/${ARQ}`, { cache: "no-cache" });
+      if (r2.status === 404) return { sha: null, dados: null };
+      if (!r2.ok) throw { code: "limite" };
+      texto = await r2.text();
+    } else {
+      if (!res.ok) throw { code: "http" };
+      const j = await res.json();
+      sha = j.sha || null;
+      if (j.encoding === "base64" && typeof j.content === "string" && j.content) texto = td.decode(deB64(j.content));
+      else {
+        const r3 = await pedir(`${API}/contents/${ARQ}?ref=${RAMO}`, { headers: { ...cabecalhos(comChave), Accept: "application/vnd.github.raw+json" }, cache: "no-store" });
+        if (!r3.ok) throw { code: "http" };
+        texto = await r3.text();
+      }
+    }
+    let arq; try { arq = JSON.parse(texto); } catch (_) { throw { code: "formato" }; }
+    const { dados, sal } = await destrancar(arq);
+    return { sha, dados, sal, alteradoEm: arq.atualizadoEm || null };
+  }
+  async function gravarRemoto(arq, sha) {
+    const corpo = { message: "Atualiza os dados da fatura", content: b64(te.encode(JSON.stringify(arq))), branch: RAMO };
+    if (sha) corpo.sha = sha;
+    const res = await pedir(`${API}/contents/${ARQ}`, { method: "PUT", headers: { ...cabecalhos(true), "Content-Type": "application/json" }, body: JSON.stringify(corpo), cache: "no-store" });
+    if (res.ok) { const j = await res.json(); return { sha: (j && j.content && j.content.sha) || null }; }
+    let msg = ""; try { msg = String((await res.json()).message || ""); } catch (_) { /* sem corpo */ }
+    if (res.status === 401) throw { code: "chave" };
+    if (res.status === 409 || (res.status === 422 && /sha/i.test(msg))) return { conflito: true };
+    if ((res.status === 404 || res.status === 422) && /branch/i.test(msg)) return { semRamo: true };
+    if ((res.status === 403 || res.status === 429) && /rate limit/i.test(msg)) throw { code: "limite" };
+    if (res.status === 403 || res.status === 404) throw { code: "permissao" };
+    throw { code: "http" };
+  }
+  async function criarRamo() {
+    const r1 = await pedir(`${API}/git/ref/heads/main`, { headers: cabecalhos(true), cache: "no-store" });
+    if (r1.status === 401) throw { code: "chave" };
+    if (!r1.ok) throw { code: r1.status === 403 || r1.status === 404 ? "permissao" : "http" };
+    const base = (await r1.json()).object.sha;
+    const r2 = await pedir(`${API}/git/refs`, { method: "POST", headers: { ...cabecalhos(true), "Content-Type": "application/json" }, body: JSON.stringify({ ref: "refs/heads/" + RAMO, sha: base }) });
+    if (r2.status === 401) throw { code: "chave" };
+    if (!r2.ok && r2.status !== 422) throw { code: r2.status === 403 || r2.status === 404 ? "permissao" : "http" };
+  }
+
+  // sincronizar: uma operação de cada vez
+  let filaNuvem = Promise.resolve();
+  function naFila(fn) { const p = filaNuvem.then(fn); filaNuvem = p.catch(() => {}); return p; }
+  // junta o que veio do GitHub com as mudanças deste celular que ainda não subiram
+  function aplicar(remoto) {
+    const local = S.db.exportar(), pend = lerPend(), junto = { ...remoto };
+    for (const c of Object.keys(pend)) { if (c in local) junto[c] = local[c]; else delete junto[c]; }
+    const ks = new Set([...Object.keys(junto), ...Object.keys(local)]);
+    for (const k of ks) if (JSON.stringify(junto[k]) !== JSON.stringify(local[k])) { S.db.substituir(junto, { remoto: true }); return true; }
+    return false;
+  }
+  function perderChave() {
+    NV.token = ""; gravarCfg({ k: NV.segredo, t: "" }); clearTimeout(NV.timerEnvio);
+    S.readOnly = true; S.soLeitura = true;
+  }
+  function erroNuvem(e) {
+    const code = (e && e.code) || "http";
+    NV.erro = code;
+    if ((code === "chave" || code === "permissao") && !NV.testando) perderChave();
+    return code;
+  }
+  function textoErroNuvem(code) {
+    switch (code) {
+      case "rede": return "Sem internet agora. Mostrando o que estava salvo neste celular" + (NV.token ? "; suas mudanças sobem quando a internet voltar." : ".");
+      case "senha": return "A senha deste link não abre a fatura. Peça o link de novo para quem edita.";
+      case "formato": return "A fatura compartilhada veio num formato que o app não conhece. Recarregue a página.";
+      case "navegador": return "Este navegador é antigo demais para abrir a fatura compartilhada. Atualize o Chrome (ou o Safari) e tente de novo.";
+      case "chave": return "A chave de edição deixou de funcionar (venceu ou foi apagada no GitHub). Cole uma chave nova em “Compartilhamento” para voltar a editar.";
+      case "permissao": return "Essa chave não tem permissão para salvar. Ao criar a chave no GitHub, escolha o repositório fatura-a-dois e, em Contents, “Read and write”.";
+      case "limite": return "O GitHub pediu uma pausa nas atualizações. Tento de novo em alguns minutos.";
+      default: return "O GitHub não respondeu agora. Tento de novo daqui a pouco.";
+    }
+  }
+  function atualizarNuvemUI(completo) { if (completo) render(); else { desenharNuvemStatus(); desenharNuvem(); } }
+  function buscar() {
+    if (!NV.ativo || !S.db) return Promise.resolve();
+    return naFila(async () => {
+      const eraPronto = NV.pronto, eraLeitura = S.readOnly;
+      NV.buscando = true; desenharNuvemStatus();
+      try {
+        const rem = await lerRemoto();
+        if (rem.dados === null) NV.vazio = true;
+        else if (rem.sha && NV.velhos.has(rem.sha)) { /* o GitHub ainda devolve a versão anterior: ignora */ }
+        else { NV.vazio = false; if (rem.sha) NV.sha = rem.sha; NV.sal = rem.sal; NV.alteradoEm = rem.alteradoEm; aplicar(rem.dados); }
+        NV.erro = ""; NV.buscadoEm = Date.now();
+      } catch (e) { erroNuvem(e); NV.buscadoEm = Date.now(); }
+      finally { NV.buscando = false; NV.pronto = true; atualizarNuvemUI(!eraPronto || eraLeitura !== S.readOnly); }
+      if (NV.token && (nPend() || NV.vazio)) agendarEnvio(300);
+    });
+  }
+  function agendarEnvio(ms) {
+    if (!NV.ativo || !NV.token) return;
+    clearTimeout(NV.timerEnvio);
+    NV.timerEnvio = setTimeout(() => { enviar(); }, ms === undefined ? 2500 : ms);
+    desenharNuvemStatus();
+  }
+  // forcar: sobe mesmo sem mudança (serve para testar uma chave nova)
+  function enviar(forcar) {
+    if (!NV.ativo || !NV.token || !S.db) return Promise.resolve(false);
+    clearTimeout(NV.timerEnvio);
+    return naFila(async () => {
+      if (!nPend() && !forcar && !NV.vazio) return true;
+      const eraLeitura = S.readOnly;
+      NV.enviando = true; desenharNuvemStatus();
+      try {
+        for (let tent = 0; tent < 5; tent++) {
+          const rem = await lerRemoto();
+          if (rem.sha && NV.velhos.has(rem.sha)) { await esperar(1000 * (tent + 1)); continue; }
+          const snap = lerPend(), local = S.db.exportar();
+          const junto = rem.dados === null ? { ...local } : { ...rem.dados };
+          for (const c of Object.keys(snap)) { if (c in local) junto[c] = local[c]; else delete junto[c]; }
+          const arq = await trancar(junto, rem.sal);
+          let r = await gravarRemoto(arq, rem.sha);
+          if (r.semRamo) { await criarRamo(); r = await gravarRemoto(arq, null); }
+          if (r.conflito || r.semRamo) { await esperar(800 * (tent + 1)); continue; }
+          if (rem.sha) NV.velhos.add(rem.sha);
+          NV.sha = r.sha; NV.sal = deB64(arq.kdf.sal); NV.alteradoEm = arq.atualizadoEm; NV.vazio = false;
+          const agora = lerPend(); for (const c of Object.keys(snap)) if (agora[c] === snap[c]) delete agora[c];
+          gravarPend(agora);
+          aplicar(junto);
+          NV.erro = ""; NV.buscadoEm = Date.now();
+          return true;
+        }
+        throw { code: "http" };
+      } catch (e) {
+        const code = erroNuvem(e);
+        if (NV.token && !NV.testando && (code === "rede" || code === "http" || code === "limite")) NV.timerEnvio = setTimeout(() => { enviar(); }, 30000);
+        return false;
+      } finally {
+        NV.enviando = false;
+        atualizarNuvemUI(eraLeitura !== S.readOnly);
+        if (NV.token && !NV.erro && nPend()) agendarEnvio(500);
+      }
+    });
+  }
+  async function salvarChave(valor) {
+    const t = String(valor || "").trim();
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(t)) { NV.msgChave = "Isso não parece uma chave do GitHub. Ela começa com github_pat_ (copie a chave inteira)."; desenharNuvem(); return; }
+    NV.token = t; NV.testando = true; NV.msgChave = ""; desenharNuvem();
+    const ok = await enviar(true);
+    NV.testando = false;
+    if (ok) { gravarCfg({ k: NV.segredo, t }); S.readOnly = false; S.soLeitura = false; NV.msgChave = "Pronto: este celular agora pode editar. As mudanças aparecem para quem tem o link."; }
+    else { const code = NV.erro; NV.token = ""; NV.erro = ""; NV.msgChave = code === "chave" ? "O GitHub não aceitou essa chave. Confira se copiou ela inteira, ou crie outra." : textoErroNuvem(code); }
+    render();
+  }
+  function dadosLocaisAntigos() {
+    try { const d = JSON.parse(lsLer(K_LOCAL) || "{}"); return docsValidos(d) && Object.keys(d).some((k) => k.startsWith("faturas/")) ? d : null; }
+    catch (_) { return null; }
+  }
+  function mesmosDados(a, b) {
+    const ka = Object.keys(a), kb = Object.keys(b);
+    return ka.length === kb.length && ka.every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+  }
+  function linkCompartilhado() { return location.origin + location.pathname + "#k=" + NV.segredo; }
+  async function copiarLink() {
+    try { await navigator.clipboard.writeText(linkCompartilhado()); NV.copiou = true; setTimeout(() => { NV.copiou = false; desenharNuvem(); }, 2500); }
+    catch (_) { NV.mostrarLink = true; }
+    desenharNuvem();
+  }
+  const podeEnviarLink = () => typeof navigator.share === "function";
+  async function enviarLink() {
+    try { await navigator.share({ title: "Fatura a dois", text: "Fatura do cartão (abre só por este link):", url: linkCompartilhado() }); }
+    catch (e) { if (!e || e.name !== "AbortError") copiarLink(); }
+  }
+  function abrirLinkColado(txt) {
+    const s = String(txt || "").trim();
+    const m = /#k=([A-Za-z0-9_-]{16,64})/.exec(s) || /^([A-Za-z0-9_-]{16,64})$/.exec(s);
+    if (!m) { NV.msgLink = "Não achei a senha nesse link. Copie o link inteiro que te mandaram (ele termina com #k= e umas letras)."; desenharNuvem(); return; }
+    const ant = lerCfg(); gravarCfg({ k: m[1], t: ant ? ant.t : "" });
+    location.reload();
+  }
+  function confirmarNuvem() {
+    const c = NV.confirmar; NV.confirmar = null;
+    if (c === "sair") { gravarCfg(null); lsGravar(K_CACHE, null); lsGravar(K_PEND, null); location.reload(); return; }
+    if (c === "tirar") { perderChave(); lsGravar(K_PEND, null); NV.msgChave = ""; NV.erro = ""; buscar(); }
+    if (c === "locais") {
+      const d = dadosLocaisAntigos();
+      if (d && NV.token) { try { S.db.substituir(d); S.atual = null; S.temPessoas = false; } catch (e) { erroEscrita(e); } }
+    }
+    render();
+  }
+  function quando(iso) {
+    const d = iso ? new Date(iso) : null; if (!d || isNaN(d)) return "";
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return d.toDateString() === new Date().toDateString() ? "hoje às " + hora : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} às ${hora}`;
+  }
+  function desenharNuvemStatus() {
+    const el = $("#nuvem-status");
+    if (!NV.ativo || !S.db) { el.classList.add("hidden"); return; }
+    el.classList.remove("hidden");
+    const pend = nPend(), mudou = NV.alteradoEm ? " Última mudança: " + quando(NV.alteradoEm) + "." : "";
+    let txt;
+    if (NV.erro) txt = textoErroNuvem(NV.erro);
+    else if (!NV.pronto) txt = "Carregando a fatura compartilhada…";
+    else if (NV.vazio && !NV.token) txt = "Ainda não tem nada neste link. Quando a fatura for lançada, aparece aqui.";
+    else if (NV.token) txt = NV.enviando || NV.testando ? "Salvando…" : pend ? "Salvando em instantes…" : "Tudo salvo." + mudou;
+    else txt = "Você está só vendo a fatura compartilhada." + mudou;
+    fill(el, h("span", { class: "nv-dot" + (NV.erro ? " bad" : NV.token ? " edit" : "") }), h("span", { class: "nv-txt", text: txt }),
+      !NV.token || NV.erro ? h("button", { type: "button", class: "btn small-btn", "data-act": "nuvem-atualizar", disabled: NV.buscando, text: NV.buscando ? "Atualizando…" : "Atualizar" }) : null);
+  }
+  function desenharNuvem() {
+    const el = $("#nuvem");
+    const mostrar = !!S.db && S.view !== "graficos" && (NV.ativo ? NV.pronto : S.carregou.faturas);
+    el.classList.toggle("hidden", !mostrar);
+    if (!mostrar) { NV.assinatura = ""; return; }
+    const pend = nPend();
+    const locais = NV.ativo && NV.token ? dadosLocaisAntigos() : null;
+    const temLocais = !!locais && !mesmosDados(locais, S.db.exportar());
+    const ass = JSON.stringify([NV.ativo, !!NV.token, NV.abrir, NV.confirmar, NV.msgChave, NV.msgLink, NV.testando, NV.copiou, NV.mostrarLink, pend > 0, temLocais]);
+    if (ass === NV.assinatura) return;
+    NV.assinatura = ass;
+    if (!NV.ativo) {
+      fill(el, h("details", { id: "det-nuvem", open: NV.abrir || NV.msgLink ? true : null },
+        h("summary", null, h("span", { class: "s-left", text: "Abrir a fatura compartilhada" })),
+        h("p", { class: "muted small", text: "Recebeu o link da fatura compartilhada? Abra o link direto ou cole ele aqui: este celular passa a mostrar a mesma fatura de quem edita." }),
+        h("form", { class: "form-row", id: "form-link" },
+          h("input", { type: "text", id: "inp-link", placeholder: "Cole o link aqui", "aria-label": "Link da fatura compartilhada", autocomplete: "off", autocapitalize: "off", spellcheck: "false" }),
+          h("button", { type: "submit", class: "btn", text: "Abrir" })),
+        NV.msgLink ? h("p", { class: "small txt-erro", text: NV.msgLink }) : null));
+      return;
+    }
+    let conf = null;
+    if (NV.confirmar) {
+      const perde = pend ? ` ${pend === 1 ? "Uma mudança que ainda não subiu se perde" : pend + " mudanças que ainda não subiram se perdem"}.` : "";
+      const n = locais ? Object.keys(locais).filter((k) => k.startsWith("faturas/")).length : 0;
+      const txt = NV.confirmar === "sair" ? "Sair do compartilhamento? Este celular para de mostrar a fatura compartilhada e volta para os dados que ficam só nele." + perde
+        : NV.confirmar === "tirar" ? "Tirar a chave de edição deste celular? Ele passa a só ver a fatura." + perde
+        : `Trocar a fatura compartilhada pelo que estava só neste celular (${n} fatura${n === 1 ? "" : "s"})? Quem tem o link passa a ver isso.`;
+      conf = h("div", { class: "card notice" }, h("p", { text: txt }),
+        h("div", { class: "controls" },
+          h("button", { type: "button", class: "btn primary", "data-act": "nuvem-confirmar", text: NV.confirmar === "sair" ? "Sair" : NV.confirmar === "tirar" ? "Tirar a chave" : "Trocar" }),
+          h("button", { type: "button", class: "btn", "data-act": "nuvem-cancelar", text: "Cancelar" })));
+    }
+    fill(el, h("details", { id: "det-nuvem", open: NV.abrir || NV.confirmar || NV.msgChave || NV.mostrarLink || NV.testando ? true : null },
+      h("summary", null, h("span", { class: "s-left", text: "Compartilhamento" }), h("span", { class: "muted small", text: NV.token ? "este celular edita" : "este celular só vê" })),
+      h("p", { class: "muted small", text: NV.token
+        ? "O que você muda aqui aparece para quem tem o link. A cópia fica no GitHub, trancada com a senha do link."
+        : "Você vê a mesma fatura de quem edita, e ela se atualiza sozinha. Para mudar alguma coisa, este celular precisa da chave de edição." }),
+      h("div", { class: "controls" },
+        podeEnviarLink() ? h("button", { type: "button", class: "btn", "data-act": "nuvem-enviar-link", text: "Enviar o link" }) : null,
+        h("button", { type: "button", class: "btn", "data-act": "nuvem-copiar", text: NV.copiou ? "Link copiado!" : "Copiar o link" })),
+      NV.mostrarLink ? h("input", { type: "text", class: "inp-link", readonly: true, value: linkCompartilhado(), "aria-label": "Link da fatura compartilhada" }) : null,
+      h("p", { class: "muted small", text: "Quem tiver o link vê tudo: mande só para quem pode ver." }),
+      !NV.token ? h("form", { class: "form-row", id: "form-chave" },
+        h("label", { class: "muted small full", for: "inp-chave", text: "Chave de edição (criada no GitHub, começa com github_pat_)" }),
+        h("input", { type: "password", id: "inp-chave", placeholder: "github_pat_…", autocomplete: "off", autocapitalize: "off", spellcheck: "false" }),
+        h("button", { type: "submit", class: "btn primary", disabled: NV.testando, text: NV.testando ? "Conferindo…" : "Editar neste celular" })) : null,
+      NV.msgChave ? h("p", { class: "small" + (NV.token ? "" : " txt-erro"), text: NV.msgChave }) : null,
+      temLocais && !NV.confirmar ? h("div", { class: "controls" },
+        h("span", { class: "muted small", text: "Este celular tem dados de antes do compartilhamento." }),
+        h("button", { type: "button", class: "btn small-btn", "data-act": "nuvem-usar-locais", text: "Usar esses dados no compartilhado" })) : null,
+      conf,
+      !NV.confirmar ? h("div", { class: "controls" },
+        NV.token ? h("button", { type: "button", class: "btn small-btn", "data-act": "nuvem-tirar-chave", text: "Tirar a chave deste celular" }) : null,
+        h("button", { type: "button", class: "btn small-btn", "data-act": "nuvem-sair", text: "Sair do compartilhamento" })) : null));
+  }
+  function iniciarNuvem() {
+    buscar();
+    setInterval(() => { if (document.visibilityState === "visible") buscar(); }, 120000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") { if (Date.now() - NV.buscadoEm > 20000) buscar(); }
+      else if (NV.token && nPend()) enviar();
+    });
+    window.addEventListener("online", () => { buscar(); });
   }
 
   // ---------- gráficos ----------
@@ -1159,7 +1546,16 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     else if (act === "confirmar-restaurar") confirmarRestaurar();
     else if (act === "backup-baixar") baixarBackup();
     else if (act === "backup-enviar") enviarBackup();
+    else if (act === "nuvem-atualizar") buscar();
+    else if (act === "nuvem-copiar") copiarLink();
+    else if (act === "nuvem-enviar-link") enviarLink();
+    else if (act === "nuvem-sair") { NV.confirmar = "sair"; desenharNuvem(); }
+    else if (act === "nuvem-tirar-chave") { NV.confirmar = "tirar"; desenharNuvem(); }
+    else if (act === "nuvem-usar-locais") { NV.confirmar = "locais"; desenharNuvem(); }
+    else if (act === "nuvem-cancelar") { NV.confirmar = null; desenharNuvem(); }
+    else if (act === "nuvem-confirmar") confirmarNuvem();
   });
+  document.addEventListener("toggle", (e) => { if (e.target && e.target.id === "det-nuvem") NV.abrir = e.target.open; }, true);
   document.addEventListener("change", (ev) => {
     const t = ev.target;
     if (t.id === "sel-fatura") { S.atual = t.value; S.aiMsg = ""; S.abrirDiv = null; render(); }
@@ -1172,6 +1568,8 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   });
   document.addEventListener("submit", (ev) => {
     ev.preventDefault();
+    if (ev.target.id === "form-chave") { salvarChave($("#inp-chave").value); return; }
+    if (ev.target.id === "form-link") { abrirLinkColado($("#inp-link").value); return; }
     if (S.readOnly || !S.db) return;
     if (ev.target.id === "form-regra") {
       const p = $("#inp-padrao").value; const d = $("#sel-dono").value;
@@ -1191,9 +1589,14 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   // ---------- inicialização ----------
   render();
   (async () => {
-    const db = criarBanco("fatura-a-dois:v1");
+    senhaDaHash();
+    const cfg = lerCfg();
+    if (cfg) { NV.ativo = true; NV.segredo = cfg.k; NV.token = cfg.t; }
+    // a fatura compartilhada fica guardada separada dos dados só deste celular
+    const db = criarBanco(cfg ? K_CACHE : K_LOCAL, marcarPendentes);
     if (!db) { S.semDb = true; render(); return; }
     S.db = db; S.podeEscrever = true; S.souDono = true; S.sample = null;
+    if (NV.ativo && !NV.token) { S.readOnly = true; S.soLeitura = true; }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) { /* sem suporte */ }
     const timer = setTimeout(() => { S.lento = true; render(); }, 10000);
     const limpar = () => { if (S.carregou.faturas && S.carregou.regras) { clearTimeout(timer); S.lento = false; } };
@@ -1234,6 +1637,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
         render();
       }
     }, () => {});
+    if (NV.ativo) iniciarNuvem();
   })();
 })();
 </script>

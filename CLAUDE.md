@@ -1,7 +1,23 @@
 # Fatura a dois: como manter e publicar
 
 - App estático: `index.html` (HTML, CSS e JS num arquivo só), `manifest.webmanifest` e ícones. Publicado pelo GitHub Pages a partir da branch `main`, na raiz. Publicar = commit + push na `main`; o Pages atualiza sozinho em cerca de 1 minuto.
-- Os dados de quem usa ficam no navegador (localStorage, chave `fatura-a-dois:v1`). Nunca commitar CSV de fatura nem arquivos de backup: têm dados pessoais (o `.gitignore` já bloqueia).
-- Chaves do banco local: `faturas/AAAA-MM-DD`, `regras/<slug>`, `config/pessoas`. Backup: `{ app: "fatura-a-dois", versao: 1, exportadoEm, dados: { caminho: documento } }`. Qualquer mudança de formato precisa continuar lendo backups antigos.
-- Antes de publicar: servir a pasta com `python3 -m http.server`, abrir no Playwright em largura de celular (390 px), restaurar um backup de teste, subir um CSV no formato do Nubank (`date,title,amount`), separar uma compra, recarregar a página e conferir que nada se perdeu e que o console não tem erros. Usar só dados inventados nos testes.
+- O app tem dois modos:
+  - **Só neste celular**: dados no localStorage, chave `fatura-a-dois:v1`.
+  - **Compartilhado**: quem abre o link `…/fatura-a-dois/#k=<senha>` vê a fatura guardada em `dados.json`, na branch `dados` deste repositório. O arquivo é cifrado no navegador: AES-GCM 256, chave PBKDF2-SHA256 (100 mil iterações) tirada da senha do link, e gzip só acima de 400 KB.
+    - Sem chave do GitHub, o celular só vê e relê a cada 2 minutos.
+    - Com uma chave fine-grained (Contents: Read and write, só neste repositório), ele edita e grava pela API (`PUT contents`), juntando com o que mudou no GitHub.
+    - No celular ficam `fatura-a-dois:compartilhar` (`{k: senha, t: chave}`), `fatura-a-dois:compartilhado` (a cópia) e `fatura-a-dois:compartilhado:pendentes`.
+- Nunca commitar CSV de fatura, arquivo de backup, a senha do link nem uma chave do GitHub. O `.gitignore` já bloqueia CSV e backup.
+  - O único dado de verdade no repositório é o `dados.json` cifrado da branch `dados`, que o app grava sozinho.
+  - Não apagar essa branch nem editar o arquivo à mão. Para trocar o conteúdo, use `testes/cifra.py`.
+- Chaves do banco: `faturas/AAAA-MM-DD`, `regras/<slug>`, `config/pessoas`.
+  - Backup: `{ app: "fatura-a-dois", versao: 1, exportadoEm, dados: { caminho: documento } }`.
+  - O `dados.json` guarda o mesmo `{ app, versao, dados }` dentro da cifra.
+  - Qualquer mudança de formato precisa continuar lendo backups e arquivos antigos.
+- Antes de publicar, rodar `NODE_PATH=$(npm root -g) node testes/teste-compartilhar.js`.
+  - Ele usa Playwright a 390 px, dados inventados e a API do GitHub simulada.
+  - Cobre o modo local (backup, CSV, separar, recarregar) e o compartilhamento.
+  - Tem que terminar em "TUDO CERTO", sem erros no console.
+  - Se mudou a tela, olhe os prints que ele salva.
+  - Usar só dados inventados nos testes.
 - Textos do app em português do Brasil, falando com quem usa.
