@@ -109,6 +109,17 @@ ul.linhas { list-style: none; margin: 0; padding: 0; display: grid; }
 .pbtn:disabled { cursor: default; opacity: .6; }
 .divpick { grid-column: 1 / -1; display: grid; gap: 8px; background: color-mix(in srgb, var(--div) 10%, var(--surface)); border-radius: 8px; padding: 10px; }
 .divpick .opts { display: flex; flex-wrap: wrap; gap: 12px; }
+.div-modos { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; justify-self: start; }
+.div-modos button { font: 600 13px/1 var(--font-b); border: 0; background: transparent; color: var(--muted); padding: 8px 12px; border-radius: 8px; cursor: pointer; min-height: 34px; }
+.div-modos button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.div-valores { display: grid; gap: 6px; }
+.div-linha { display: grid; grid-template-columns: minmax(0, 1fr) 118px auto; gap: 8px; align-items: center; }
+.div-linha .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.div-linha .nm::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--pc); flex: none; }
+.div-linha input { text-align: right; min-width: 0; width: 100%; }
+.div-soma { font-size: 13px; }
+.div-soma.ok { color: var(--accent); font-weight: 600; }
+.div-soma.ruim { color: var(--bad); }
 .sug { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px;
   background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 8px; padding: 6px 10px; }
 .sug b { font-weight: 700; }
@@ -311,7 +322,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     carregou: { faturas: false, regras: false }, lento: false, aiBusy: false, aiMsg: "",
     upload: null, uploadErro: "", erroEscrita: "", abrirDiv: null, copiado: null, textoCopia: null, removendo: null,
     podeEscrever: null, souDono: null, salvandoUpload: false, uploadTitulo: "", soLeitura: false,
-    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, atualEscolhido: false, abertos: new Set(), foco: false, pulados: new Set(), focoPrimeiro: null,
+    view: location.hash === "#graficos" ? "graficos" : "separar", pessoaGraf: null, atualEscolhido: false, divModo: {}, abertos: new Set(), foco: false, pulados: new Set(), focoPrimeiro: null,
   };
 
   // ---------- texto ----------
@@ -338,10 +349,35 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     const ids = [...new Set(base)].filter((id) => pessoa(id));
     return ids.length ? ids : null;
   }
+  // Compra dividida com valores digitados: { id: valor }. Só vale se fecha com o total e bate com quem divide.
+  function partesValidas(l) {
+    const ids = divisaoDe(l), p = l && l.partes;
+    if (!ids || !p || typeof p !== "object" || !(l.valor > 0)) return null;
+    const ks = Object.keys(p);
+    if (ks.length !== ids.length || !ids.every((id) => Number.isFinite(p[id]) && p[id] >= 0)) return null;
+    return Math.abs(ids.reduce((a, id) => a + p[id], 0) - l.valor) < 0.011 ? p : null;
+  }
+  // Quanto cada pessoa paga numa compra dividida: os valores digitados ou partes iguais.
+  function partesDivisao(l) {
+    const ids = divisaoDe(l); if (!ids) return null;
+    const p = partesValidas(l);
+    return ids.map((id) => ({ pid: id, v: p ? p[id] : l.valor / ids.length }));
+  }
+  function escalarPartes(partes, de, para) {
+    const ks = partes ? Object.keys(partes) : [];
+    if (!ks.length || !de) return null;
+    const out = {}; let soma = 0;
+    ks.forEach((k, j) => { if (j < ks.length - 1) { out[k] = Math.round(partes[k] * para / de * 100) / 100; soma += out[k]; } });
+    out[ks[ks.length - 1]] = Math.round((para - soma) * 100) / 100;
+    return out;
+  }
   function temDono(l) { return l.dono === "dividir" ? !!divisaoDe(l) : !!pessoa(l.dono); }
   const donoValido = (d, x) => (d === "dividir" ? !!divisaoDe(x || {}) : !!pessoa(d));
   function rotuloDono(x) {
-    if (x.dono === "dividir") { const ids = divisaoDe(x) || []; return "Dividir: " + ids.map(nome).join(", "); }
+    if (x.dono === "dividir") {
+      if (partesValidas(x)) return "Dividido: " + partesDivisao(x).map((q) => `${nome(q.pid)} ${fmt(q.v)}`).join(" · ");
+      const ids = divisaoDe(x) || []; return "Dividir: " + ids.map(nome).join(", ");
+    }
     return nome(x.dono);
   }
 
@@ -409,22 +445,24 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
         const q = parcela(l.desc);
         if (!q || q.base !== p.base || q.tot !== p.tot || q.n >= p.n) continue;
         if (Math.abs(Math.abs(l.valor) - Math.abs(valor)) > 0.05) continue;
-        if (!best || q.n > best.n) best = { n: q.n, dono: l.dono, divisao: l.divisao };
+        if (!best || q.n > best.n) best = { n: q.n, dono: l.dono, divisao: l.divisao, partes: partesValidas(l), valor: l.valor };
       }
     }
     return best;
   }
-  function aplicarDono(l, dono, via, divisao) {
+  function aplicarDono(l, dono, via, divisao, partes) {
     l.dono = dono; l.via = dono ? via : null;
-    if (dono === "dividir") l.divisao = (Array.isArray(divisao) && divisao.length ? divisao : divPadrao()).slice();
-    else delete l.divisao;
+    if (dono === "dividir") {
+      l.divisao = (Array.isArray(divisao) && divisao.length ? divisao : divPadrao()).slice();
+      if (partes && typeof partes === "object") l.partes = { ...partes }; else delete l.partes;
+    } else { delete l.divisao; delete l.partes; }
   }
   function autoClassificar(linhas, fid) {
     let n = 0;
     for (const l of linhas) {
       if (l.tipo !== "compra" || temDono(l)) continue;
       const c = continuacao(l.desc, l.valor, fid);
-      if (c) { aplicarDono(l, c.dono, "parcela", c.divisao); n++; continue; }
+      if (c) { aplicarDono(l, c.dono, "parcela", c.divisao, c.partes ? escalarPartes(c.partes, c.valor, l.valor) : null); n++; continue; }
       const r = regraPara(l.desc);
       if (r) { aplicarDono(l, r.dono, "regra", r.divisao); n++; }
     }
@@ -442,8 +480,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       }
       tot += l.valor;
       if (l.dono === "dividir") {
-        const ids = divisaoDe(l);
-        if (ids) { for (const id of ids) parte[id] += l.valor / ids.length; continue; }
+        const ps = partesDivisao(l);
+        if (ps) { for (const q of ps) parte[q.pid] += q.v; continue; }
       } else if (l.dono && l.dono in parte) { parte[l.dono] += l.valor; continue; }
       sem += l.valor; nSem++;
     }
@@ -517,7 +555,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   // Cada escolha guarda como as linhas (e a regra aprendida) estavam antes; "Desfazer" volta a última.
   const pilhaDesfazer = [];
   let mostrarDesfazer = false, timerDesfazer = null;
-  const estadoDono = (l) => ({ i: l.i, dono: l.dono || null, via: l.via || null, divisao: Array.isArray(l.divisao) ? l.divisao.slice() : null });
+  const estadoDono = (l) => ({ i: l.i, dono: l.dono || null, via: l.via || null, divisao: Array.isArray(l.divisao) ? l.divisao.slice() : null, partes: l.partes ? { ...l.partes } : null });
   const curta = (s) => { s = String(s || ""); return s.length > 30 ? s.slice(0, 29) + "…" : s; };
   function registrarAcao(acao) {
     pilhaDesfazer.push(acao); if (pilhaDesfazer.length > 50) pilhaDesfazer.shift();
@@ -534,6 +572,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
         if (s.dono) l.dono = s.dono; else delete l.dono;
         if (s.via) l.via = s.via; else delete l.via;
         if (s.divisao) l.divisao = s.divisao.slice(); else delete l.divisao;
+        if (s.partes) l.partes = { ...s.partes }; else delete l.partes;
       }
       if (a.pag) { const l = f.linhas.find((x) => x.i === a.pag.i); if (l) { delete l.pagoPorEle; if (a.pag.antes) l.pagoPor = a.pag.antes; else delete l.pagoPor; } }
       f.atualizadoEm = new Date().toISOString();
@@ -567,16 +606,16 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   }
 
   // ---------- ações ----------
-  function definir(fid, i, dono, via, divisao) {
+  function definir(fid, i, dono, via, divisao, partes) {
     if (S.readOnly) return;
     const f = S.faturas.get(fid); if (!f) return;
     const l = f.linhas.find((x) => x.i === i); if (!l) return;
     S.focoPrimeiro = null;
     const antes = new Map(f.linhas.map((x) => [x.i, estadoDono(x)]));
     let regra = null;
-    aplicarDono(l, dono, via || "manual", divisao);
+    aplicarDono(l, dono, via || "manual", divisao, partes);
     S.sug.delete(fid + ":" + i);
-    if (dono && S.lembrar && l.tipo === "compra" && l.valor > 0 && !parcela(l.desc)) {
+    if (dono && S.lembrar && l.tipo === "compra" && l.valor > 0 && !parcela(l.desc) && !(dono === "dividir" && l.partes)) {
       const k = chave(l.desc);
       const idRegra = slug(norm(k)), regraAntes = S.regras.has(idRegra) ? clone(S.regras.get(idRegra)) : null;
       salvarRegra(k, dono, l.divisao);
@@ -648,7 +687,10 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     for (const l of [...f.linhas].sort(porData)) {
       if (l.tipo !== "compra") continue;
       if (l.dono === pid) linhas.push(`${diaMes(l.data)}  ${l.desc}  ${fmt(l.valor)}`);
-      else if (l.dono === "dividir") { const ids = divisaoDe(l); if (ids && ids.includes(pid)) linhas.push(`${diaMes(l.data)}  ${l.desc}  ${fmt(l.valor / ids.length)} (dividido por ${ids.length})`); }
+      else if (l.dono === "dividir") {
+        const ps = partesDivisao(l) || []; const q = ps.find((x) => x.pid === pid);
+        if (q) linhas.push(`${diaMes(l.data)}  ${l.desc}  ${fmt(q.v)} (${partesValidas(l) ? `sua parte de ${fmt(l.valor)}` : `dividido por ${ps.length}`})`);
+      }
     }
     let txt = `${f.rotulo || fid} · parte de ${nome(pid)}: ${fmt(t.parte[pid])}\n\n${linhas.join("\n") || "Nenhuma compra."}`;
     if (pid !== S.dona) txt += `\n\nJá pago: ${fmt(t.pagos[pid])}\nFalta devolver: ${fmt(r2(t.parte[pid] - t.pagos[pid]))}`;
@@ -687,7 +729,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
         if (arr && arr.length) {
           iguais++;
           const o = arr.shift();
-          if (o.dono) aplicarDono(l, o.dono, o.via || "manual", o.divisao);
+          if (o.dono) aplicarDono(l, o.dono, o.via || "manual", o.divisao, partesValidas(o));
           const q = o.pagoPor || (o.pagoPorEle ? "ele" : null); if (q) l.pagoPor = q;
         }
       }
@@ -783,16 +825,66 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
       "aria-pressed": l.dono === "dividir" && divisaoDe(l) ? "true" : "false", "aria-expanded": S.abrirDiv === key ? "true" : "false", disabled: S.readOnly, text: "÷ Dividir" }));
     return wrap;
   }
+  // valores digitados no jeito brasileiro: "25", "25,50", "1.234,56" ou "25.50"
+  function lerValor(txt) {
+    let t = String(txt || "").replace(/[R$\s]/g, "");
+    if (!t) return 0;
+    if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+    const n = Number(t);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  const valorCampo = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
+  function somaDivisao(box) {
+    const total = Number(box.dataset.total); let soma = 0, ruim = false;
+    for (const inp of box.querySelectorAll(".inp-parte")) { const v = lerValor(inp.value); if (Number.isNaN(v) || v < 0) ruim = true; else soma += v; }
+    soma = Math.round(soma * 100) / 100;
+    const falta = Math.round((total - soma) * 100) / 100;
+    if (ruim) return { ok: false, txt: "Tem um valor que eu não entendi. Use só números, como 25,50." };
+    if (Math.abs(falta) < 0.005) return { ok: soma > 0, txt: `Soma ${fmt(soma)}: fecha certinho com o total.` };
+    return { ok: false, txt: falta > 0 ? `Soma ${fmt(soma)} de ${fmt(total)}: faltam ${fmt(falta)}.` : `Soma ${fmt(soma)} de ${fmt(total)}: passou ${fmt(-falta)}.` };
+  }
+  function atualizarSomaDivisao(box) {
+    if (!box) return;
+    const r = somaDivisao(box), el = box.querySelector(".div-soma"), bt = box.querySelector('[data-act="confirmar-div"]');
+    if (el) { el.textContent = r.txt; el.classList.toggle("ok", r.ok); el.classList.toggle("ruim", !r.ok); }
+    if (bt) bt.disabled = !r.ok;
+  }
   function seletorDivisao(fid, l) {
-    const marcados = new Set(l.dono === "dividir" ? divisaoDe(l) || divPadrao() : divPadrao());
-    return h("div", { class: "divpick" },
-      h("span", { class: "small", text: "Dividir igualmente entre:" }),
-      h("div", { class: "opts" }, S.pessoas.map((p) => h("label", { class: "toggle" },
-        h("input", { type: "checkbox", class: "chk-div", value: p.id, checked: marcados.has(p.id) }), p.nome))),
-      h("div", { class: "controls" },
-        h("button", { type: "button", class: "btn small-btn primary", "data-act": "confirmar-div", "data-fid": fid, "data-i": l.i, text: "Dividir" }),
-        l.dono === "dividir" && divisaoDe(l) ? h("button", { type: "button", class: "btn small-btn", "data-act": "tirar-div", "data-fid": fid, "data-i": l.i, text: "Voltar para Sem dono" }) : null,
-        h("button", { type: "button", class: "btn small-btn", "data-act": "fechar-div", text: "Cancelar" })));
+    const key = fid + ":" + l.i;
+    const atual = l.dono === "dividir" ? divisaoDe(l) : null;
+    const pv = l.dono === "dividir" ? partesValidas(l) : null;
+    const podeValores = l.valor > 0;
+    const modo = podeValores ? (S.divModo[key] || (pv ? "valores" : "iguais")) : "iguais";
+    const modos = podeValores ? h("div", { class: "div-modos", role: "group", "aria-label": "Como dividir" },
+      h("button", { type: "button", "data-act": "div-modo", "data-fid": fid, "data-i": l.i, "data-modo": "iguais", "aria-pressed": modo === "iguais" ? "true" : "false", text: "Partes iguais" }),
+      h("button", { type: "button", "data-act": "div-modo", "data-fid": fid, "data-i": l.i, "data-modo": "valores", "aria-pressed": modo === "valores" ? "true" : "false", text: "Valores diferentes" })) : null;
+    const rodape = (rotulo) => h("div", { class: "controls" },
+      h("button", { type: "button", class: "btn small-btn primary", "data-act": "confirmar-div", "data-fid": fid, "data-i": l.i, text: rotulo }),
+      atual ? h("button", { type: "button", class: "btn small-btn", "data-act": "tirar-div", "data-fid": fid, "data-i": l.i, text: "Voltar para Sem dono" }) : null,
+      h("button", { type: "button", class: "btn small-btn", "data-act": "fechar-div", text: "Cancelar" }));
+    if (modo === "iguais") {
+      const marcados = new Set(atual || divPadrao());
+      return h("div", { class: "divpick", "data-modo": "iguais" }, modos,
+        h("span", { class: "small", text: "Dividir igualmente entre:" }),
+        h("div", { class: "opts" }, S.pessoas.map((p) => h("label", { class: "toggle" },
+          h("input", { type: "checkbox", class: "chk-div", value: p.id, checked: marcados.has(p.id) }), p.nome))),
+        rodape("Dividir"));
+    }
+    // valores diferentes: começa com o que já estava (valores digitados ou partes iguais)
+    const ini = {};
+    if (pv) for (const id of atual) ini[id] = pv[id];
+    else if (atual) for (const q of partesDivisao(l)) ini[q.pid] = q.v;
+    const box = h("div", { class: "divpick", "data-modo": "valores", "data-total": String(l.valor) }, modos,
+      h("span", { class: "small", text: `Quanto é de cada um? Total da compra: ${fmt(l.valor)}. Quem não tem parte, deixe vazio.` }),
+      h("div", { class: "div-valores" }, S.pessoas.map((p) => h("div", { class: "div-linha", style: estilo(p.id) },
+        h("label", { class: "nm", for: `parte-${l.i}-${p.id}`, text: p.nome }),
+        h("input", { type: "text", inputmode: "decimal", class: "inp-parte", id: `parte-${l.i}-${p.id}`, "data-pid": p.id, placeholder: "0,00", autocomplete: "off",
+          value: ini[p.id] ? valorCampo(ini[p.id]) : "" }),
+        h("button", { type: "button", class: "btn small-btn", "data-act": "div-resto", "data-pid": p.id, "aria-label": `Pôr o que falta em ${p.nome}`, text: "o resto" })))),
+      h("p", { class: "div-soma", "aria-live": "polite" }),
+      rodape("Dividir com esses valores"));
+    atualizarSomaDivisao(box);
+    return box;
   }
   function itemLinha(fid, l, comSug) {
     const key = fid + ":" + l.i;
@@ -1563,7 +1655,7 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
   }
   function partesDe(l) {
     if (l.tipo !== "compra") return [];
-    if (l.dono === "dividir") { const ids = divisaoDe(l); return ids ? ids.map((id) => ({ pid: id, v: l.valor / ids.length })) : []; }
+    if (l.dono === "dividir") return partesDivisao(l) || [];
     return pessoa(l.dono) ? [{ pid: l.dono, v: l.valor }] : [];
   }
   const pctTxt = (x) => (Math.round(x * 1000) / 10).toLocaleString("pt-BR") + "%";
@@ -1755,8 +1847,29 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
       const d = b.dataset.dono; const l = S.faturas.get(fid)?.linhas.find((x) => x.i === i);
       S.abrirDiv = null; definir(fid, i, l && l.dono === d ? null : d, "manual");
     }
-    else if (act === "abrir-div") { const key = fid + ":" + i; S.abrirDiv = S.abrirDiv === key ? null : key; render(); }
+    else if (act === "abrir-div") { const key = fid + ":" + i; S.abrirDiv = S.abrirDiv === key ? null : key; delete S.divModo[key]; render(); }
+    else if (act === "div-modo") { S.divModo[fid + ":" + i] = b.dataset.modo === "valores" ? "valores" : "iguais"; render(); }
+    else if (act === "div-resto") {
+      const box = b.closest(".divpick"); if (!box) return;
+      const alvo = box.querySelector(`.inp-parte[data-pid="${b.dataset.pid}"]`); let outros = 0;
+      for (const inp of box.querySelectorAll(".inp-parte")) if (inp !== alvo) { const v = lerValor(inp.value); if (v > 0) outros += v; }
+      const resto = Math.round((Number(box.dataset.total) - outros) * 100) / 100;
+      if (alvo) { alvo.value = resto > 0 ? valorCampo(resto) : ""; alvo.focus(); }
+      atualizarSomaDivisao(box);
+    }
     else if (act === "fechar-div") { S.abrirDiv = null; render(); }
+    else if (act === "confirmar-div" && b.closest(".divpick") && b.closest(".divpick").dataset.modo === "valores") {
+      const box = b.closest(".divpick");
+      if (!somaDivisao(box).ok) { atualizarSomaDivisao(box); return; }
+      const partes = {};
+      for (const inp of box.querySelectorAll(".inp-parte")) { const v = lerValor(inp.value); if (v > 0 && pessoa(inp.dataset.pid)) partes[inp.dataset.pid] = Math.round(v * 100) / 100; }
+      const ids = Object.keys(partes);
+      const total = Number(box.dataset.total), soma = ids.reduce((a, k) => a + partes[k], 0);
+      if (ids.length) partes[ids[ids.length - 1]] = Math.round((partes[ids[ids.length - 1]] + total - soma) * 100) / 100;   // tira diferença de centavo
+      S.abrirDiv = null; delete S.divModo[fid + ":" + i];
+      if (ids.length === 1) definir(fid, i, ids[0], "manual");
+      else definir(fid, i, "dividir", "manual", ids, partes);
+    }
     else if (act === "confirmar-div") {
       const box = b.closest(".divpick");
       const ids = [...box.querySelectorAll(".chk-div:checked")].map((x) => x.value).filter((id) => pessoa(id));
@@ -1802,6 +1915,10 @@ Responda só com um array JSON, um objeto por compra, por exemplo [{"i": 12, "do
     else if (act === "nuvem-confirmar") confirmarNuvem();
     else if (act === "nuvem-criar-mesmo") criarCompartilhamento(NV.tokenCriar, true);
     else if (act === "nuvem-criar-cancelar") { NV.confirmarCriar = false; NV.tokenCriar = ""; desenharNuvem(); }
+  });
+  document.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains("inp-parte")) atualizarSomaDivisao(t.closest(".divpick"));
   });
   document.addEventListener("toggle", (e) => {
     if (e.target && e.target.id === "det-nuvem") NV.abrir = e.target.open;

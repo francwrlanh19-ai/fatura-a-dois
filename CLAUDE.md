@@ -12,6 +12,10 @@
   - O único dado de verdade no repositório é o `dados.json` cifrado da branch `dados`, que o app grava sozinho.
   - Não apagar essa branch nem editar o arquivo à mão. Os dados só mudam pelo próprio app (inclusive restaurar um backup). O `testes/cifra.py` é só para os testes.
 - Chaves do banco: `faturas/AAAA-MM-DD`, `regras/<slug>`, `config/pessoas`.
+  - Compra dividida: `dono: "dividir"` e `divisao: [ids]`.
+    - Se os valores foram digitados, a compra tem também `partes: { id: valor }`, com soma igual ao valor da compra.
+    - Sem `partes`, ou com partes que não fecham, divide em partes iguais.
+    - Divisão com valores não vira regra. A parcela seguinte herda os valores, proporcionais ao valor dela.
   - Backup: `{ app: "fatura-a-dois", versao: 1, exportadoEm, dados: { caminho: documento } }`.
   - O `dados.json` guarda o mesmo `{ app, versao, dados }` dentro da cifra.
   - Qualquer mudança de formato precisa continuar lendo backups e arquivos antigos.

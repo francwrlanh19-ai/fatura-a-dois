@@ -486,6 +486,53 @@ async function chave(pg, tok, re) {
     await up.click('[data-act="confirmar-upload"]'); await esperar(300);
     ok((await faturaVista(up)).includes('11/12/2026') && /Sorveteria/.test(await up.$eval('#semdono', (e) => e.innerText)), 'depois de atualizar, mostra a fatura com a compra nova');
 
+    // 20) Dividir com valores diferentes
+    const dv = await celular(browser, 'valores'); paginas.push(dv);
+    await dv.goto(BASE); await dv.waitForSelector('#vazio:not(.hidden)');
+    await dv.setInputFiles('#inp-backup', DIR + '/backup-inventado.json');
+    await dv.click('[data-act="confirmar-restaurar"]'); await dv.waitForSelector('#semdono:not(.hidden)');
+    const parteDe = (n) => dv.$$eval('.tile', (els, n) => { const t = els.find((e) => e.querySelector('.lbl').textContent === 'Parte de ' + n); return t ? t.querySelector('.val').textContent : null; }, n);
+    const regrasDv = () => dv.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('fatura-a-dois:v1') || '{}')).filter((k) => k.startsWith('regras/')).length);
+    const rDv0 = await regrasDv();
+    await dv.locator('#semdono .linha', { hasText: 'Livraria Imaginaria' }).locator('[data-act="abrir-div"]').click();
+    await dv.click('.divpick [data-act="div-modo"][data-modo="valores"]');
+    await dv.fill('.divpick .inp-parte[data-pid="ele"]', '30');
+    await dv.fill('.divpick .inp-parte[data-pid="ela"]', '20');
+    ok(/passou R\$\s?4,10/.test(await dv.$eval('.div-soma', (e) => e.textContent)) && await dv.$eval('.divpick [data-act="confirmar-div"]', (b) => b.disabled), 'soma errada: mostra quanto passou e não deixa salvar');
+    await dv.fill('.divpick .inp-parte[data-pid="ela"]', '');
+    await dv.click('.divpick [data-act="div-resto"][data-pid="ela"]');
+    ok((await dv.$eval('.divpick .inp-parte[data-pid="ela"]', (i) => i.value)) === '15,90' && /fecha certinho/.test(await dv.$eval('.div-soma', (e) => e.textContent)), '"o resto" completa o que falta (15,90)');
+    await dv.screenshot({ path: DIR + '/tela-dividir-valores.png' });
+    await dv.click('.divpick [data-act="confirmar-div"]');
+    ok(/Livraria Imaginaria[\s\S]*Beto R\$\s?30,00 · Ana R\$\s?15,90/.test(await dv.$eval('#separadas details[data-abre="sep-dividir"]', (d) => d.textContent)), 'a compra mostra quanto ficou com cada um');
+    ok(/R\$\s?51,50/.test(await parteDe('Beto')) && /R\$\s?84,90/.test(await parteDe('Ana')), `os totais usam os valores digitados (Beto ${await parteDe('Beto')}, Ana ${await parteDe('Ana')})`);
+    await esperar(300);
+    ok((await regrasDv()) === rDv0, 'valores digitados não viram regra para as próximas faturas');
+    await dv.locator('.tile', { hasText: 'Parte de Beto' }).locator('[data-act="copiar"]').click(); await esperar(300);
+    const resumoBeto = await dv.evaluate(() => navigator.clipboard.readText());
+    ok(/Livraria Imaginaria\s+R\$\s?30,00 \(sua parte de R\$\s?45,90\)/.test(resumoBeto), 'o resumo do Beto mostra a parte dele na compra dividida');
+    await dv.click('#semdono [data-act="desfazer"]');
+    ok(/R\$\s?21,50/.test(await parteDe('Beto')) && /Livraria Imaginaria/.test(await dv.$eval('#semdono', (e) => e.textContent)), 'desfazer volta a compra para Sem dono');
+    // parcela dividida com valores: a próxima parcela já vem dividida igual
+    await dv.click('#separadas details[data-abre="sep-ela"] summary');
+    await dv.locator('#separadas details[data-abre="sep-ela"] .linha', { hasText: 'Loja Ficticia' }).locator('[data-act="abrir-div"]').click();
+    await dv.click('.divpick [data-act="div-modo"][data-modo="valores"]');
+    await dv.fill('.divpick .inp-parte[data-pid="ele"]', '40');
+    await dv.fill('.divpick .inp-parte[data-pid="ela"]', '');
+    await dv.click('.divpick [data-act="div-resto"][data-pid="ela"]');
+    await dv.click('.divpick [data-act="confirmar-div"]');
+    await dv.setInputFiles('#inp-file', DIR + '/Nubank_2027-01-11.csv');
+    await esperarTexto(dv, '#upload', /Fatura nova/);
+    await dv.click('[data-act="confirmar-upload"]'); await esperar(400);
+    ok(/Loja Ficticia - Parcela 3\/5[\s\S]*Beto R\$\s?40,00 · Ana R\$\s?20,00/.test(await dv.$eval('#separadas details[data-abre="sep-dividir"]', (d) => d.textContent)), 'a parcela seguinte já vem dividida com os mesmos valores');
+    // abrir de novo mostra os valores salvos
+    await dv.click('#separadas details[data-abre="sep-dividir"] summary');
+    await dv.locator('#separadas details[data-abre="sep-dividir"] .linha', { hasText: 'Loja Ficticia' }).locator('[data-act="abrir-div"]').click();
+    ok((await dv.$eval('.divpick', (b) => b.dataset.modo)) === 'valores' && (await dv.$eval('.divpick .inp-parte[data-pid="ele"]', (i) => i.value)) === '40,00', 'abrir de novo mostra os valores que estavam');
+    await dv.click('.divpick [data-act="fechar-div"]');
+    await esperar(1200); await dv.reload(); await dv.waitForSelector('#semdono:not(.hidden)');
+    ok(/Beto R\$\s?40,00 · Ana R\$\s?20,00/.test(await dv.$eval('#separadas', (e) => e.textContent)), 'depois de recarregar, os valores continuam');
+
     const erros = paginas.flatMap((p) => p.erros);
     ok(!erros.length, 'console sem erros' + (erros.length ? ': ' + erros.join(' | ') : ''));
   } catch (e) {
